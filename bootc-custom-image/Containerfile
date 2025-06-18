@@ -35,6 +35,7 @@ RUN update-ca-trust && \
     dnf -y clean all && \
     rm -rf /var/{cache,log} /var/lib/{dnf,rhsm} && \
     rm -rf /tmp/kasmvncserver_fedora_fortyone_1.3.4_x86_64.rpm && \
+    git clone https://github.com/ohmybash/oh-my-bash.git /etc/skel/.oh-my-bash && \
     sed -i 's/mate-terminal/terminator/g' /usr/share/mate-panel/layouts/fedora.layout && \
     systemctl disable dnf-makecache.timer && \
     systemctl mask dnf-makecache.timer && \
