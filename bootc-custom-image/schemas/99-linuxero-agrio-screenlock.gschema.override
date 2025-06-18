@@ -1,0 +1,11 @@
+[org.mate.session]
+idle-delay=5
+
+[org.mate.screensaver]
+lock-delay=0
+lock-enabled=true
+
+[org.mate.power-manager]
+sleep-computer-ac=0
+sleep-display-ac=300
+button-power='shutdown'

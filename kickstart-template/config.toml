@@ -1,0 +1,70 @@
+[customizations.installer.kickstart]
+contents = """
+# Installation Display Mode
+graphical
+
+# EULA
+eula --agreed 
+
+# Keyboard Layout
+keyboard --vckeymap=latam --xlayouts='latam'
+
+# System language
+lang es_MX.UTF-8
+
+# TimeZone
+timezone America/Mexico_City
+
+# Disk partitioning
+## Destroy all disks
+zerombr
+## Disk used by installation program
+ignoredisk --only-use=vda,vdb
+## Cleaning disks
+clearpart --all --initlabel --drives=vda,vdb
+## Partitions
+part /boot/efi --fstype="efi" --ondisk=vda --size=600 --fsoptions="umask=0077,shortname=winnt"
+part /boot --fstype="xfs" --ondisk=vda --size=1024
+part / --fstype="xfs" --ondisk=vda --grow
+part /var/home --fstype="xfs" --ondisk=vdb --grow
+
+# Network config
+network --bootproto=dhcp --hostname USERNAME-virtual-desktop.linuxero-agrio.com.mx 
+
+# Admin User
+user --groups=wheel --name=admin --password=ADMINPASS --plain --gecos="Admin User"
+sshkey --username admin "ADMINSSHPUBKEY"
+
+# Regular user
+user --groups=kasmvnc-cert --name=USERNAME --password=USERPASS --plain --gecos="COMPLETEUSERNAME"
+
+# Reboot when finish
+reboot
+
+%post --erroronfail --log /var/roothome/post-config.log
+
+# Add flathub
+runuser -l USERNAME -c 'flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo'
+# Set VNC Password
+runuser -l USERNAME -c 'echo -e "USERPASS\\nUSERPASS\\n" | vncpasswd -u USERNAME -o -w'
+# Enable VNC user systemd service
+runuser -l USERNAME -c 'ln -s /var/home/USERNAME/.config/systemd/user/kasmvnc@:1.service /var/home/USERNAME/.config/systemd/user/default.target.wants/kasmvnc@:1.service'
+# Enable linger for user
+loginctl enable-linger USERNAME
+%end
+
+"""
+
+[customizations.installer.modules]
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Localization",
+  "org.fedoraproject.Anaconda.Modules.Network",
+  "org.fedoraproject.Anaconda.Modules.Payloads",
+  "org.fedoraproject.Anaconda.Modules.Runtime",
+  "org.fedoraproject.Anaconda.Modules.Security",
+  "org.fedoraproject.Anaconda.Modules.Services",
+  "org.fedoraproject.Anaconda.Modules.Storage",
+  "org.fedoraproject.Anaconda.Modules.Subscription",
+  "org.fedoraproject.Anaconda.Modules.Timezone",
+  "org.fedoraproject.Anaconda.Modules.Users"
+]

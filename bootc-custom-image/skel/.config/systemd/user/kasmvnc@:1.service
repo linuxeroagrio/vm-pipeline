@@ -1,0 +1,12 @@
+[Unit]
+Description=Web VNC Server
+After=network-online.target
+ 
+[Service]
+Type=forking
+Restart=on-failure
+ExecStart=vncserver %i
+ExecStop=vncserver -kill %i
+
+[Install]
+WantedBy=default.target

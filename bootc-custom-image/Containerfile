@@ -1,0 +1,56 @@
+FROM quay.io/fedora/fedora-bootc:42
+
+EXPOSE 8444/tcp
+
+COPY --chown=0:0 certs /etc/pki/ca-trust/source/anchors/
+COPY --chown=0:0 bootc-fetch-apply-updates.timer.d /usr/lib/systemd/system/bootc-fetch-apply-updates.timer.d/
+COPY --chown=0:0 schemas /usr/share/glib-2.0/schemas/
+COPY --chown=0:0 custom-theme/themes /usr/share/themes/
+COPY --chown=0:0 custom-theme/icons /usr/share/icons/
+COPY --chown=0:0 custom-theme/wallpaper /usr/share/backgrounds/
+COPY --chown=0:0 skel /etc/skel/
+COPY vnc/kasmvncserver_fedora_fortyone_1.3.4_x86_64.rpm /tmp/
+
+RUN update-ca-trust && \
+    dnf -y install @mate-desktop \
+                   qemu-guest-agent \
+                   spice-vdagent \
+                   spice-webdavd \
+                   firewalld \
+                   flatpak \
+                   fastfetch \
+                   vim \
+                   terminator \
+                   git \
+                   dbus-x11 \
+                   /tmp/kasmvncserver_fedora_fortyone_1.3.4_x86_64.rpm && \
+    dnf -y remove mate-terminal \
+                  nano \
+                  dnfdragora \
+                  xfburn \
+                  parole \
+                  gparted \
+                  gnome-disk-utility && \
+    dnf -y autoremove && \
+    dnf -y clean all && \
+    rm -rf /var/{cache,log} /var/lib/{dnf,rhsm} && \
+    rm -rf /tmp/kasmvncserver_fedora_fortyone_1.3.4_x86_64.rpm && \
+    sed -i 's/mate-terminal/terminator/g' /usr/share/mate-panel/layouts/fedora.layout && \
+    systemctl disable dnf-makecache.timer && \
+    systemctl mask dnf-makecache.timer && \
+    systemctl disable packagekit.service && \
+    systemctl mask packagekit.service && \
+    systemctl disable packagekit-offline-update.service && \
+    systemctl mask packagekit-offline-update.service && \
+    systemctl disable flatpak-add-fedora-repos.service && \
+    systemctl mask flatpak-add-fedora-repos.service && \
+    systemctl enable firewalld.service && \
+    firewall-offline-cmd --add-port=8444/tcp && \
+    systemctl set-default graphical.target && \
+    echo 'KEYMAP="latam"' > /etc/vconsole.conf && \
+    echo 'FONT="eurlatgr"' >> /etc/vconsole.conf && \
+    echo "LANG=es_MX.UTF-8" > /etc/locale.conf && \ 
+    ln -sf /usr/share/zoneinfo/America/Mexico_City /etc/localtime && \
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ && \
+    dconf update && \
+    bootc container lint
