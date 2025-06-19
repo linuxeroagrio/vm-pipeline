@@ -11,7 +11,6 @@ COPY --chown=0:0 custom-theme/themes /usr/share/themes/
 COPY --chown=0:0 custom-theme/icons /usr/share/icons/
 COPY --chown=0:0 custom-theme/wallpaper /usr/share/backgrounds/
 COPY --chown=0:0 skel /etc/skel/
-ADD  --chown=0:0 https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_fedora_fortyone_${KASMVNC_VERSION}_x86_64.rpm /tmp/
 
 RUN update-ca-trust && \
     dnf -y install @mate-desktop \
@@ -25,7 +24,7 @@ RUN update-ca-trust && \
                    terminator \
                    git \
                    dbus-x11 \
-                   /tmp/kasmvncserver_fedora_fortyone_${KASMVNC_VERSION}_x86_64.rpm && \
+                   https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_fedora_fortyone_${KASMVNC_VERSION}_x86_64.rpm && \
     dnf -y remove mate-terminal \
                   nano \
                   dnfdragora \
