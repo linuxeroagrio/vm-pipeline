@@ -11,6 +11,7 @@ COPY --chown=0:0 custom-theme/themes /usr/share/themes/
 COPY --chown=0:0 custom-theme/icons /usr/share/icons/
 COPY --chown=0:0 custom-theme/wallpaper /usr/share/backgrounds/
 COPY --chown=0:0 skel /etc/skel/
+COPY --chown=0:0 bin /usr/local/bin/
 
 RUN update-ca-trust && \
     dnf -y install @mate-desktop \
