@@ -1,0 +1,14 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ .Release.Name }}-web-vnc
+spec:
+  port:
+    targetPort: 8444
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: passthrough
+  to:
+    kind: Service
+    name: {{ .Release.Name }}-web-vnc
+    weight: 100

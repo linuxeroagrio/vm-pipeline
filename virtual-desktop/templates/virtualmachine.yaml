@@ -1,0 +1,57 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: {{ .Release.Name }}-virtualdesktop
+spec:
+  runStrategy: Halted
+  template:
+    metadata:
+      labels: 
+        remote-desktop-user: {{ .Release.Name }}
+    spec:   
+      domain: 
+        firmware:
+          bootloader:
+            efi:
+              secureBoot: false
+        devices:
+          disks:  
+          - bootOrder: 1
+            name: rootdisk
+            disk:
+              bus: virtio
+          - bootOrder: 2
+            name: homedisk
+            disk:
+              bus: virtio
+          - bootOrder: 3
+            name: cdrom-custom-iso
+            cdrom:
+              bus: sata
+              readonly: true
+              tray: closed
+          interfaces:
+          - masquerade: {}
+            model: virtio
+            name: default 
+        resources:
+          requests:
+            memory: 4Gi
+            cpu: "2"
+          limits:
+            memory: 4Gi
+            cpu: "2"
+      networks:
+      - name: default 
+        pod: {} 
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - name: rootdisk
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-virtual-desktop-rootdisk-pvc
+      - name: homedisk
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-virtual-desktop-homedisk-pvc
+      - name: cdrom-custom-iso
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-virtual-desktop-iso-pvc
