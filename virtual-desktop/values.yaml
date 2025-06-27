@@ -20,7 +20,3 @@ storage:
     capacity: "30Gi"
     accessMode: ReadWriteOnce
     storageClass: lvms-vg1
-  isodisk:
-    capacity: "5Gi"
-    accessMode: ReadWriteOnce
-    storageClass: lvms-vg1
