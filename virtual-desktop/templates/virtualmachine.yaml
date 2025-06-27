@@ -3,7 +3,7 @@ kind: VirtualMachine
 metadata:
   name: {{ .Release.Name }}-virtualdesktop
 spec:
-  runStrategy: Halted
+  runStrategy: {{ .Values.virtualMachineResources.runStrategy | default "Halted" }}
   template:
     metadata:
       labels: 
@@ -29,18 +29,18 @@ spec:
             cdrom:
               bus: sata
               readonly: true
-              tray: closed
+              tray: {{ .Values.virtualMachineResources.cdrom.tray | default "closed" }}
           interfaces:
           - masquerade: {}
             model: virtio
             name: default 
         resources:
           requests:
-            memory: 4Gi
-            cpu: "2"
+            memory: {{ .Values.virtualMachineResources.memory | default "4Gi" }}
+            cpu: {{ .Values.virtualMachineResources.cpu | default "2" | quote }}
           limits:
-            memory: 4Gi
-            cpu: "2"
+            memory: {{ .Values.virtualMachineResources.memory | default "4Gi" }}
+            cpu: {{ .Values.virtualMachineResources.cpu | default "2" | quote }}
       networks:
       - name: default 
         pod: {} 

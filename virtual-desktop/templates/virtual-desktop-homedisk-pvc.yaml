@@ -4,8 +4,8 @@ metadata:
   name: {{ .Release.Name }}-virtual-desktop-homedisk-pvc
 spec:
   accessModes:
-  - ReadWriteOnce
+  - {{ .Values.storage.homedisk.accessMode | default "ReadWriteOnce" }}
   resources:
     requests:
-      storage: 20Gi
-  storageClassName: lvms-vg1
+      storage: {{ .Values.storage.homedisk.capacity | default "20Gi" }}
+  storageClassName: {{ .Values.storage.homedisk.storageClass | default "lvms-vg1" }}

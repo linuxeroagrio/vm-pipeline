@@ -4,8 +4,8 @@ metadata:
   name: {{ .Release.Name }}-virtual-desktop-rootdisk-pvc
 spec:
   accessModes:
-  - ReadWriteOnce
+  - {{ .Values.storage.rootdisk.accessMode | default "ReadWriteOnce" }}
   resources:
     requests:
-      storage: 30Gi
-  storageClassName: lvms-vg1
+      storage: {{ .Values.storage.rootdisk.capacity | default "30Gi" }}
+  storageClassName: {{ .Values.storage.rootdisk.storageClass | default "lvms-vg1" }}

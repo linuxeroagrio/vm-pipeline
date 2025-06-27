@@ -1,29 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "virtual-desktop.fullname" . }}
-  labels:
-    {{- include "virtual-desktop.labels" . | nindent 4 }}
-spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
-  selector:
-    {{- include "virtual-desktop.selectorLabels" . | nindent 4 }}
-
----
-apiVersion: v1
-kind: Service
-metadata:
   name: {{ .Release.Name }}-web-vnc
 spec:
   ports:
-  - port: 8444
+  - port: {{ .Values.service.port | default 8444 }}
     protocol: TCP
-    targetPort: 8444
+    targetPort: {{ .Values.service.port | default 8444 }}
   selector:
     remote-desktop-user: {{ .Release.Name }}
   type: ClusterIP

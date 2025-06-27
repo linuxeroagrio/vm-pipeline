@@ -4,8 +4,8 @@ metadata:
   name: {{ .Release.Name }}-virtual-desktop-iso-pvc
 spec:
   accessModes:
-  - ReadWriteOnce
+  - {{ .Values.storage.isodisk.accessMode | default "ReadWriteOnce" }}
   resources:
     requests:
-      storage: 4Gi
-  storageClassName: lvms-vg1
+      storage: {{ .Values.storage.isodisk.capacity | default "5Gi" }}
+  storageClassName: {{ .Values.storage.isodisk.storageClass | default "lvms-vg1" }}
