@@ -50,7 +50,8 @@ runuser -l USERNAME -c 'echo -e "USERPASS\\nUSERPASS\\n" | vncpasswd -u USERNAME
 # Enable VNC user systemd service
 runuser -l USERNAME -c 'ln -s /var/home/USERNAME/.config/systemd/user/kasmvnc@:1.service /var/home/USERNAME/.config/systemd/user/default.target.wants/kasmvnc@:1.service'
 # Enable linger for user
-loginctl enable-linger USERNAME
+#loginctl enable-linger USERNAME
+touch /var/lib/systemd/linger/USERNAME
 %end
 
 """
