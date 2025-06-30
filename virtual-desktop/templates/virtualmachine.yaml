@@ -3,7 +3,7 @@ kind: VirtualMachine
 metadata:
   name: {{ .Release.Name }}-virtualdesktop
 spec:
-  runStrategy: {{ .Values.virtualMachineResources.runStrategy | default "Halted" }}
+  runStrategy: {{ .Values.virtualMachineResources.runStrategy | default "Manual" }}
   template:
     metadata:
       labels: 

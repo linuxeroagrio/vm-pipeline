@@ -1,6 +1,6 @@
 # Virtual machine configuration
 virtualMachineResources:
-  runStrategy: Halted #https://kubevirt.io/user-guide/compute/run_strategies/
+  runStrategy: Manual #https://kubevirt.io/user-guide/compute/run_strategies/
   memory: 4Gi
   cpu: "2"
   cdrom:
