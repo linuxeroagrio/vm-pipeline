@@ -43,15 +43,29 @@ reboot
 
 %post --erroronfail --log /var/roothome/post-config.log
 
+# Set multi-user default target
+systemctl set-default multi-user.target
+
 # Add flathub
 runuser -l USERNAME -c 'flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo'
+
 # Set VNC Password
 runuser -l USERNAME -c 'echo -e "USERPASS\\nUSERPASS\\n" | vncpasswd -u USERNAME -o -w'
+
 # Enable VNC user systemd service
-runuser -l USERNAME -c 'ln -s /var/home/USERNAME/.config/systemd/user/kasmvnc@:1.service /var/home/USERNAME/.config/systemd/user/default.target.wants/kasmvnc@:1.service'
+#runuser -l USERNAME -c 'ln -s /var/home/USERNAME/.config/systemd/user/kasmvnc@:1.service /var/home/USERNAME/.config/systemd/user/default.target.wants/kasmvnc@:1.service'
+
 # Enable linger for user
 #loginctl enable-linger USERNAME
+#touch /var/lib/systemd/linger/USERNAME
+mkdir -p /var/lib/systemd/linger
 touch /var/lib/systemd/linger/USERNAME
+
+su USERNAME << 'EOF'
+ln -s /var/home/USERNAME/.config/systemd/user/kasmvnc@:1.service /var/home/USERNAME/.config/systemd/user/default.target.wants/kasmvnc@:1.service
+exit
+EOF
+
 %end
 
 """
