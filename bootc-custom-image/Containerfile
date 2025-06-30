@@ -4,6 +4,7 @@ EXPOSE 8444/tcp
 
 ENV KASMVNC_VERSION=1.3.4
 
+COPY --chown=0:0 sudoers.d /etc/sudoers.d/
 COPY --chown=0:0 certs /etc/pki/ca-trust/source/anchors/
 COPY --chown=0:0 bootc-fetch-apply-updates.timer.d /usr/lib/systemd/system/bootc-fetch-apply-updates.timer.d/
 COPY --chown=0:0 schemas /usr/share/glib-2.0/schemas/
