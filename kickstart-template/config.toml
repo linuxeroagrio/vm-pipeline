@@ -37,6 +37,7 @@ sshkey --username admin "ADMINSSHPUBKEY"
 
 # Regular user
 user --groups=kasmvnc-cert --name=USERNAME --password=USERPASS --plain --gecos="COMPLETEUSERNAME"
+sshkey --username USERNAME "ADMINSSHPUBKEY"
 
 # Poweroff when finish
 poweroff
