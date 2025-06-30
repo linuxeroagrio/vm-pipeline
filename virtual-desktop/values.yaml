@@ -17,6 +17,6 @@ storage:
     accessMode: ReadWriteOnce
     storageClass: lvms-vg1
   homedisk:
-    capacity: "30Gi"
+    capacity: "20Gi"
     accessMode: ReadWriteOnce
     storageClass: lvms-vg1
