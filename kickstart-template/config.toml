@@ -38,8 +38,8 @@ sshkey --username admin "ADMINSSHPUBKEY"
 # Regular user
 user --groups=kasmvnc-cert --name=USERNAME --password=USERPASS --plain --gecos="COMPLETEUSERNAME"
 
-# Reboot when finish
-reboot
+# Poweroff when finish
+poweroff
 
 %post --erroronfail --log /var/roothome/post-config.log
 
@@ -51,21 +51,6 @@ runuser -l USERNAME -c 'flatpak remote-add --user --if-not-exists flathub https:
 
 # Set VNC Password
 runuser -l USERNAME -c 'echo -e "USERPASS\\nUSERPASS\\n" | vncpasswd -u USERNAME -o -w'
-
-# Enable VNC user systemd service
-#runuser -l USERNAME -c 'ln -s /var/home/USERNAME/.config/systemd/user/kasmvnc@:1.service /var/home/USERNAME/.config/systemd/user/default.target.wants/kasmvnc@:1.service'
-
-# Enable linger for user
-#loginctl enable-linger USERNAME
-#touch /var/lib/systemd/linger/USERNAME
-mkdir -p /var/lib/systemd/linger
-touch /var/lib/systemd/linger/USERNAME
-
-su USERNAME << 'EOF'
-ln -s /var/home/USERNAME/.config/systemd/user/kasmvnc@:1.service /var/home/USERNAME/.config/systemd/user/default.target.wants/kasmvnc@:1.service
-exit
-EOF
-
 %end
 
 """
