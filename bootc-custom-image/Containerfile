@@ -49,7 +49,7 @@ RUN update-ca-trust && \
     systemctl mask flatpak-add-fedora-repos.service && \
     systemctl enable firewalld.service && \
     firewall-offline-cmd --add-port=8444/tcp && \
-    systemctl set-default graphical.target && \
+    systemctl set-default multi-user.target && \
     echo 'KEYMAP="latam"' > /etc/vconsole.conf && \
     echo 'FONT="eurlatgr"' >> /etc/vconsole.conf && \
     echo "LANG=es_MX.UTF-8" > /etc/locale.conf && \ 
