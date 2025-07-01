@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}-web-vnc
 spec:
   port:
-    targetPort: {{ .Values.service.name | default vnc }}
+    targetPort: {{ .Values.service.name | default "vnc" }}
   tls:
     insecureEdgeTerminationPolicy: Redirect
     termination: passthrough

@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}-web-vnc
 spec:
   ports:
-  - name: {{ .Values.service.name | default vnc }}
+  - name: {{ .Values.service.name | default "vnc" }}
     port: {{ .Values.service.port | default 8444 }}
     protocol: TCP
     targetPort: {{ .Values.service.port | default 8444 }}
