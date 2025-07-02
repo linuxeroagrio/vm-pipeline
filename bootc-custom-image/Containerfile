@@ -51,6 +51,11 @@ RUN update-ca-trust && \
     systemctl enable firewalld.service && \
     firewall-offline-cmd --add-port=8444/tcp && \
     systemctl set-default multi-user.target && \
+    mkdir -pv /var/lib/flatpak/repo/{objects,tmp} && \
+    echo '[core]' > /var/lib/flatpak/repo/config && \
+    echo 'repo_version=1' >> /var/lib/flatpak/repo/config && \
+    echo 'mode=bare-user-only' >> /var/lib/flatpak/repo/config && \
+    echo 'min-free-space-size=500MB' >> /var/lib/flatpak/repo/config && \
     echo 'KEYMAP="latam"' > /etc/vconsole.conf && \
     echo 'FONT="eurlatgr"' >> /etc/vconsole.conf && \
     echo "LANG=es_MX.UTF-8" > /etc/locale.conf && \ 
