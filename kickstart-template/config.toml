@@ -47,11 +47,6 @@ poweroff
 # Set multi-user default target
 systemctl set-default multi-user.target
 
-# Add flathub
-runuser -l USERNAME -c 'flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo'
-
-# Set VNC Password
-runuser -l USERNAME -c 'echo -e "USERPASS\\nUSERPASS\\n" | vncpasswd -u USERNAME -o -w'
 %end
 
 """
