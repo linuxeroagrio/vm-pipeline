@@ -1,0 +1,998 @@
+apiVersion: v1
+items:
+- apiVersion: tekton.dev/v1
+  kind: Pipeline
+  metadata:
+    creationTimestamp: "2025-06-30T22:36:24Z"
+    generation: 30
+    name: prepare-user-virtualdesktop-pipeline
+    namespace: vm-pipelines
+    resourceVersion: "17011729"
+    uid: 398defcf-2f9d-4300-a5a4-980689531ad4
+  spec:
+    finally:
+    - name: notify-error
+      params:
+      - name: bot-token-secret
+        value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+      - name: chat-id
+        value: $(params.TELEGRAM_CHAT_ID)
+      - name: message
+        value: Prepare virtual desktop for user $(params.USER_NAME) in error
+      taskRef:
+        kind: Task
+        name: send-to-telegram
+      when:
+      - input: $(tasks.status)
+        operator: in
+        values:
+        - Failed
+    - name: send-vnc-access
+      params:
+      - name: bot-token-secret
+        value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+      - name: chat-id
+        value: $(params.TELEGRAM_CHAT_ID)
+      - name: message
+        value: |-
+          Success provisioned your virtual desktop, access info bellow:\n
+          Username: $(tasks.get-vm-vnc-access-info.results.vnc-username) \n
+          Password: $(tasks.get-vm-vnc-access-info.results.vnc-userpass)\n
+          URL: $(tasks.get-vm-vnc-access-info.results.vnc-url)
+      taskRef:
+        kind: Task
+        name: send-to-telegram
+      when:
+      - input: $(tasks.status)
+        operator: in
+        values:
+        - Succeeded
+    params:
+    - description: Name of virtual machine
+      name: VIRTUAL_MACHINE_NAME
+      type: string
+    - description: Virtual Machine Namesapce
+      name: VIRTUAL_MACHINE_NAMESPACE
+      type: string
+    - description: Secret that contains admin user SSH Credentials
+      name: ADMIN_SSH_CREDENTIALS
+      type: string
+    - description: Regular User Name
+      name: USER_NAME
+      type: string
+    - description: Telegram bot token secret
+      name: TELEGRAM_BOT_TOKEN_SECRET
+      type: string
+    - description: Telegram chat id to send messages
+      name: TELEGRAM_CHAT_ID
+      type: string
+    tasks:
+    - name: validate-if-vm-exists
+      params:
+      - name: SCRIPT
+        value: |-
+          oc get vm -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+          if [ "$?" == "0" ]
+          then
+            echo "Virtual Machine exists"
+            exit 0
+          else
+            echo "Virtual Machine does not exists"
+            exit 1
+          fi
+      - name: VERSION
+        value: "4.19"
+      taskRef:
+        kind: Task
+        name: openshift-client
+    - name: start-vm
+      params:
+      - name: ARGS
+        value: start -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+      - name: VIRTCTL_IMAGE
+        value: quay.io/linuxeroagrio/virtctl:4.19
+      runAfter:
+      - validate-if-vm-exists
+      taskRef:
+        kind: Task
+        name: virtctl-cli
+    - name: wait-for-vm-running
+      params:
+      - name: vmiName
+        value: $(params.VIRTUAL_MACHINE_NAME)
+      - name: vmiNamespace
+        value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+      - name: successCondition
+        value: status.phase == Running
+      - name: failureCondition
+        value: status.phase in (Failed, Unknown)
+      runAfter:
+      - start-vm
+      - get-vm-vnc-access-info
+      taskRef:
+        kind: Task
+        name: wait-for-vmi-status
+    - name: enable-vnc-service
+      params:
+      - name: HOST
+        value: $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc
+      - name: USERNAME
+        value: $(params.USER_NAME)
+      - name: PORT
+        value: "22"
+      - name: SSH_SCRIPT
+        value: systemctl --user enable "kasmvnc@:1.service"
+      - name: USE_INSECURE_CIPHER
+        value: "false"
+      runAfter:
+      - wait-for-vm-running
+      - wait-for-ssh-port
+      taskRef:
+        kind: Task
+        name: remote-ssh-commands
+      workspaces:
+      - name: credentials
+        workspace: user-password-workspace
+    - name: wait-for-ssh-port
+      params:
+      - name: ARGS
+        value: |-
+          INDEX=0
+          ITERATIONS=60
+          SLEEP_TIME_SEC=1
+          while [ $INDEX -le $ITERATIONS ]
+          do
+            nc -zv $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc 22
+            if [ "$?" == "0" ]
+            then
+              exit 0
+            else
+              let INDEX=$INDEX+1
+              sleep ${SLEEP_TIME_SEC}
+            fi
+          done
+          exit 1
+      - name: NETTOOLS_IMAGE
+        value: image-registry.openshift-image-registry.svc:5000/openshift/network-tools:latest
+      runAfter:
+      - start-vm
+      - get-vm-vnc-access-info
+      taskRef:
+        kind: Task
+        name: net-tools
+    - name: enable-linger
+      params:
+      - name: vmName
+        value: $(params.VIRTUAL_MACHINE_NAME)
+      - name: vmNamespace
+        value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+      - name: secretName
+        value: $(params.ADMIN_SSH_CREDENTIALS)
+      - name: command
+        value: []
+      - name: args
+        value: []
+      - name: script
+        value: |-
+          sudo loginctl enable-linger $(params.USER_NAME)
+          sudo loginctl list-users | grep $(params.USER_NAME) | grep yes
+      runAfter:
+      - enable-vnc-service
+      - add-flathub
+      - create-vnc-password
+      taskRef:
+        kind: Task
+        name: execute-in-vm
+    - name: update-vm-runstrategy
+      params:
+      - name: SCRIPT
+        value: 'oc patch -n $(params.VIRTUAL_MACHINE_NAMESPACE) virtualmachine $(params.VIRTUAL_MACHINE_NAME)
+          --type=''json'' -p=''[{"op": "replace", "path": "/spec/runStrategy", "value":"Always"}]'''
+      - name: VERSION
+        value: "4.19"
+      runAfter:
+      - enable-vnc-service
+      - add-flathub
+      - create-vnc-password
+      taskRef:
+        kind: Task
+        name: openshift-client
+    - name: restart-vm
+      params:
+      - name: ARGS
+        value: restart -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+      - name: VIRTCTL_IMAGE
+        value: quay.io/linuxeroagrio/virtctl:4.19
+      runAfter:
+      - update-vm-runstrategy
+      - enable-linger
+      taskRef:
+        kind: Task
+        name: virtctl-cli
+    - name: wait-for-vnc-port
+      params:
+      - name: ARGS
+        value: |-
+          INDEX=0
+          ITERATIONS=60
+          SLEEP_TIME_SEC=1
+          while [ $INDEX -le $ITERATIONS ]
+          do
+            nc -zv $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc 8444
+            if [ "$?" == "0" ]
+            then
+              exit 0
+            else
+              let INDEX=$INDEX+1
+              sleep ${SLEEP_TIME_SEC}
+            fi
+          done
+          exit 1
+      - name: NETTOOLS_IMAGE
+        value: image-registry.openshift-image-registry.svc:5000/openshift/network-tools:latest
+      runAfter:
+      - restart-vm
+      taskRef:
+        kind: Task
+        name: net-tools
+    - name: get-vm-vnc-access-info
+      params:
+      - name: USERNAME
+        value: $(params.USER_NAME)
+      - name: VNC_ROUTE_NAMESPACE
+        value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+      - name: OS_IMAGE
+        value: quay.io/openshift/origin-cli:4.19
+      runAfter:
+      - validate-if-vm-exists
+      taskRef:
+        kind: Task
+        name: get-vm-vnc-access-info
+    - name: add-flathub
+      params:
+      - name: HOST
+        value: $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc
+      - name: USERNAME
+        value: $(params.USER_NAME)
+      - name: PORT
+        value: "22"
+      - name: SSH_SCRIPT
+        value: flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+      - name: USE_INSECURE_CIPHER
+        value: "false"
+      runAfter:
+      - wait-for-vm-running
+      - wait-for-ssh-port
+      taskRef:
+        kind: Task
+        name: remote-ssh-commands
+      workspaces:
+      - name: credentials
+        workspace: user-password-workspace
+    - name: create-vnc-password
+      params:
+      - name: HOST
+        value: $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc
+      - name: USERNAME
+        value: $(params.USER_NAME)
+      - name: PORT
+        value: "22"
+      - name: SSH_SCRIPT
+        value: echo -e \"$(tasks.get-vm-vnc-access-info.results.vnc-userpass)\\n$(tasks.get-vm-vnc-access-info.results.vnc-userpass)\\n\"
+          | vncpasswd -u $(params.USER_NAME) -o -w
+      - name: USE_INSECURE_CIPHER
+        value: "false"
+      runAfter:
+      - wait-for-vm-running
+      - wait-for-ssh-port
+      taskRef:
+        kind: Task
+        name: remote-ssh-commands
+      workspaces:
+      - name: credentials
+        workspace: user-password-workspace
+    workspaces:
+    - name: user-password-workspace
+- apiVersion: tekton.dev/v1
+  kind: Pipeline
+  metadata:
+    creationTimestamp: "2025-06-18T23:02:30Z"
+    generation: 42
+    name: virtual-desktop-image-pipeline
+    namespace: vm-pipelines
+    resourceVersion: "16504531"
+    uid: 145eafd8-153b-41aa-bb12-dbb5ff6ad604
+  spec:
+    finally:
+    - name: notify-to-telegram
+      params:
+      - name: bot-token-secret
+        value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+      - name: chat-id
+        value: $(params.TELEGRAM_CHAT_ID)
+      - name: message
+        value: Pipeline $(context.pipelineRun.name) was $(tasks.status)
+      taskRef:
+        kind: Task
+        name: send-to-telegram
+    - name: delete-dev-vm
+      params:
+      - name: vmName
+        value: dev-vm
+      - name: secretName
+        value: $(params.ADMIN_SSH_CREDENTIALS)
+      - name: stop
+        value: "true"
+      - name: delete
+        value: "true"
+      - name: timeout
+        value: 10m
+      taskRef:
+        kind: Task
+        name: cleanup-vm
+    - name: delete-dev-vm-storage
+      params:
+      - name: SCRIPT
+        value: oc delete pvc virtual-desktop-dev-disk-pvc
+      - name: VERSION
+        value: "4.19"
+      taskRef:
+        kind: Task
+        name: openshift-client
+    params:
+    - default: git@github.com:linuxeroagrio/vm-pipeline.git
+      description: Virtual Desktop Image source code
+      name: GIT_REPO_URL
+      type: string
+    - default: quay.io/linuxeroagrio/fedora-virtual-desktop
+      description: Virtual Desktop Image Name
+      name: VIRTUALMACHINE_IMAGE_NAME
+      type: string
+    - default: Containerfile
+      description: Virtual Desktop Containerfile Name
+      name: CONTAINER_FILENAME
+      type: string
+    - default: ./bootc-custom-image
+      description: Virtual Desktop Build Image Context Dir
+      name: IMAGE_CONTEXTDIR
+      type: string
+    - description: Test machine admin password
+      name: ADMINPASS
+      type: string
+    - description: Virtual Machine admin user ssh-public key
+      name: ADMINSSHPUBKEY
+      type: string
+    - description: Secret that contains admin ser SSH Credentials
+      name: ADMIN_SSH_CREDENTIALS
+      type: string
+    - description: Telegram bot token secret
+      name: TELEGRAM_BOT_TOKEN_SECRET
+      type: string
+    - description: Telegram chat id to send messages
+      name: TELEGRAM_CHAT_ID
+      type: string
+    tasks:
+    - name: clone-repo
+      params:
+      - name: url
+        value: $(params.GIT_REPO_URL)
+      - name: revision
+        value: ""
+      - name: refspec
+        value: ""
+      - name: submodules
+        value: "true"
+      - name: depth
+        value: "1"
+      - name: sslVerify
+        value: "true"
+      - name: crtFileName
+        value: ca-bundle.crt
+      - name: subdirectory
+        value: ""
+      - name: sparseCheckoutDirectories
+        value: ""
+      - name: deleteExisting
+        value: "true"
+      - name: httpProxy
+        value: ""
+      - name: httpsProxy
+        value: ""
+      - name: noProxy
+        value: ""
+      - name: verbose
+        value: "true"
+      - name: gitInitImage
+        value: gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/git-init:v0.40.2
+      - name: userHome
+        value: /home/git
+      taskRef:
+        kind: Task
+        name: git-clone
+      workspaces:
+      - name: output
+        workspace: source
+      - name: ssh-directory
+        workspace: source-ssh-key
+    - name: containerfile-scan
+      params:
+      - name: PATH_TO_SCAN
+        value: $(params.IMAGE_CONTEXTDIR)
+      runAfter:
+      - clone-repo
+      taskRef:
+        kind: Task
+        name: kics-scan
+      workspaces:
+      - name: source
+        workspace: source
+    - name: image-scan
+      params:
+      - name: ARGS
+        value:
+        - image
+        - --exit-code
+        - "0"
+        - --timeout
+        - 60m
+        - --scanners
+        - vuln
+      - name: TRIVY_IMAGE
+        value: docker.io/aquasec/trivy@sha256:944a044451791617cc0ed2ee4d1942a4f66b790d527fcd0575a6b399ccbc05a1
+      - name: IMAGE_PATH
+        value: $(params.VIRTUALMACHINE_IMAGE_NAME):$(tasks.clone-repo.results.committer-date)
+      - name: AIR_GAPPED_ENABLED
+        value: "false"
+      runAfter:
+      - build-container-image
+      taskRef:
+        kind: Task
+        name: trivy-scanner
+      workspaces:
+      - name: manifest-dir
+        workspace: source
+    - name: build-container-image
+      params:
+      - name: IMAGE
+        value: $(params.VIRTUALMACHINE_IMAGE_NAME):$(tasks.clone-repo.results.committer-date)
+      - name: BUILDER_IMAGE
+        value: quay.io/buildah/stable:v1
+      - name: STORAGE_DRIVER
+        value: overlay
+      - name: DOCKERFILE
+        value: $(params.CONTAINER_FILENAME)
+      - name: CONTEXT
+        value: $(params.IMAGE_CONTEXTDIR)
+      - name: TLSVERIFY
+        value: "true"
+      - name: FORMAT
+        value: oci
+      - name: BUILD_EXTRA_ARGS
+        value: ""
+      - name: PUSH_EXTRA_ARGS
+        value: ""
+      - name: SKIP_PUSH
+        value: "false"
+      - name: BUILD_ARGS
+        value:
+        - ""
+      runAfter:
+      - containerfile-scan
+      taskRef:
+        kind: Task
+        name: buildah
+      timeout: 1h0m0s
+      workspaces:
+      - name: source
+        workspace: source
+      - name: dockerconfig
+        workspace: registry-credentials
+    - name: create-qcow2-rootdisk
+      params:
+      - name: SOURCE_IMAGE
+        value: $(params.VIRTUALMACHINE_IMAGE_NAME)
+      - name: SOURCE_IMAGE_TAG
+        value: $(tasks.clone-repo.results.committer-date)
+      - name: BUILDER_IMAGE
+        value: quay.io/centos-bootc/bootc-image-builder:latest
+      - name: DEST_FORMAT
+        value: qcow2
+      - name: CONFIG_TOML_CONTENT
+        value: |-
+          [[customizations.user]]
+          name = "admin"
+          password = "$(params.ADMINPASS)"
+          groups = ["wheel"]
+          key = "$(params.ADMINSSHPUBKEY)"
+      - name: TLS_VERIFY
+        value: "true"
+      - name: AWS_AMI_NAME
+        value: ""
+      - name: AWS_S3_BUCKET
+        value: ""
+      - name: AWS_S3_REGION
+        value: ""
+      runAfter:
+      - image-scan
+      taskRef:
+        kind: Task
+        name: bootc-image-builder
+      timeout: 1h0m0s
+      workspaces:
+      - name: main-workspace
+        workspace: dev-disk-image
+    - name: upload-vm-rootdisk
+      params:
+      - name: ARGS
+        value: image-upload pvc virtual-desktop-dev-disk-pvc --size=20Gi --image-path=output/qcow2/disk.qcow2
+          --storage-class=lvms-vg1 --insecure --force-bind
+      - name: VIRTCTL_IMAGE
+        value: quay.io/linuxeroagrio/virtctl:4.19
+      runAfter:
+      - create-qcow2-rootdisk
+      taskRef:
+        kind: Task
+        name: virtctl-cli
+      workspaces:
+      - name: objects
+        workspace: dev-disk-image
+    - name: create-dev-vm
+      params:
+      - name: manifest
+        value: "apiVersion: kubevirt.io/v1\nkind: VirtualMachine\nmetadata:\n  name:
+          dev-vm\nspec:\n  runStrategy: Always\n  template:\n    metadata:\n      labels:
+          \n        kasmvnc: dev\n    spec:   \n      domain: \n        firmware:\n
+          \         bootloader:\n            efi:\n              secureBoot: false\n
+          \       devices:\n          disks:  \n          - bootOrder: 1\n            name:
+          rootdisk\n          interfaces:\n          - masquerade: {}\n            model:
+          virtio\n            name: default \n        resources:\n          requests:\n
+          \           memory: 4Gi\n            cpu: \"2\"\n          limits:\n            memory:
+          4Gi\n            cpu: \"2\"\n      networks:\n      - name: default \n        pod:
+          {} \n      terminationGracePeriodSeconds: 180\n      volumes:\n      - name:
+          rootdisk\n        persistentVolumeClaim:\n          claimName: virtual-desktop-dev-disk-pvc"
+      - name: virtctl
+        value: ""
+      - name: namespace
+        value: ""
+      - name: startVM
+        value: "true"
+      - name: runStrategy
+        value: ""
+      - name: setOwnerReference
+        value: "false"
+      runAfter:
+      - upload-vm-rootdisk
+      taskRef:
+        kind: Task
+        name: create-vm-from-manifest
+    - name: wait-for-vm-running
+      params:
+      - name: vmiName
+        value: dev-vm
+      - name: vmiNamespace
+        value: ""
+      - name: successCondition
+        value: status.phase == Running
+      - name: failureCondition
+        value: ""
+      runAfter:
+      - create-dev-vm
+      taskRef:
+        kind: Task
+        name: wait-for-vmi-status
+    - name: execute-validations
+      params:
+      - name: vmName
+        value: dev-vm
+      - name: vmNamespace
+        value: ""
+      - name: secretName
+        value: $(params.ADMIN_SSH_CREDENTIALS)
+      - name: command
+        value:
+        - /usr/local/bin/validation-tests.sh
+      - name: args
+        value: []
+      - name: script
+        value: ""
+      runAfter:
+      - wait-for-vm-running
+      taskRef:
+        kind: Task
+        name: execute-in-vm
+    - name: image-promote
+      params:
+      - name: SOURCE_IMAGE_URL
+        value: docker://$(params.VIRTUALMACHINE_IMAGE_NAME):$(tasks.clone-repo.results.committer-date)
+      - name: DESTINATION_IMAGE_URL
+        value: docker://$(params.VIRTUALMACHINE_IMAGE_NAME):prod
+      - name: SRC_TLS_VERIFY
+        value: "true"
+      - name: DEST_TLS_VERIFY
+        value: "true"
+      - name: VERBOSE
+        value: "true"
+      runAfter:
+      - execute-validations
+      taskRef:
+        kind: Task
+        name: skopeo-copy
+    workspaces:
+    - name: source
+    - name: source-ssh-key
+    - name: registry-credentials
+    - name: dev-disk-image
+- apiVersion: tekton.dev/v1
+  kind: Pipeline
+  metadata:
+    creationTimestamp: "2025-06-25T21:48:45Z"
+    generation: 46
+    name: virtual-desktop-vm-deploy-pipeline
+    namespace: vm-pipelines
+    resourceVersion: "16505488"
+    uid: 658347ad-b1f4-4991-af58-57a121af420b
+  spec:
+    finally:
+    - name: notify-to-telegram
+      params:
+      - name: bot-token-secret
+        value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+      - name: chat-id
+        value: $(params.TELEGRAM_CHAT_ID)
+      - name: message
+        value: Pipeline for deploy $(params.COMPLETE_USERNAME)'s virtual machine was
+          $(tasks.status)
+      taskRef:
+        kind: Task
+        name: send-to-telegram
+    - name: delete-iso-pvc
+      params:
+      - name: SCRIPT
+        value: oc delete pvc -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(tasks.remove-domain-from-email.results.username)-virtual-desktop-iso-pvc
+          --force=true --grace-period=0
+      - name: VERSION
+        value: "4.19"
+      taskRef:
+        kind: Task
+        name: openshift-client
+    - name: delete-vm
+      params:
+      - name: ARGS
+        value: uninstall $(tasks.remove-domain-from-email.results.username) -n $(params.VIRTUAL_MACHINE_NAMESPACE)
+      - name: VIRTCTL_IMAGE
+        value: quay.io/linuxeroagrio/helm:4.19
+      taskRef:
+        kind: Task
+        name: helm-cli
+      when:
+      - input: $(tasks.status)
+        operator: in
+        values:
+        - Failed
+    - name: remove-user-credentials-secret
+      params:
+      - name: SCRIPT
+        value: oc delete secret $(tasks.remove-domain-from-email.results.username)-credentials-secret
+      - name: VERSION
+        value: "4.19"
+      taskRef:
+        kind: Task
+        name: openshift-client
+      when:
+      - input: $(tasks.status)
+        operator: in
+        values:
+        - Failed
+    - name: prepare-vm-pipeline
+      params:
+      - name: TKN_IMAGE
+        value: gcr.io/tekton-releases/dogfooding/tkn:latest
+      - name: SCRIPT
+        value: tkn pipeline start prepare-user-virtualdesktop-pipeline -p VIRTUAL_MACHINE_NAME="$1"
+          -p VIRTUAL_MACHINE_NAMESPACE="$2" -p ADMIN_SSH_CREDENTIALS="$3" -p USER_NAME="$4"
+          -p TELEGRAM_BOT_TOKEN_SECRET="$5" -p TELEGRAM_CHAT_ID='"$6"' --use-param-defaults
+          -w name=user-password-workspace,secret=$7 --pipeline-timeout 2h30m0s --showlog
+      - name: ARGS
+        value:
+        - $(tasks.remove-domain-from-email.results.username)-virtualdesktop
+        - $(params.VIRTUAL_MACHINE_NAMESPACE)
+        - admin-ssh-secret
+        - $(tasks.remove-domain-from-email.results.username)
+        - $(params.TELEGRAM_BOT_TOKEN_SECRET)
+        - $(params.TELEGRAM_CHAT_ID)
+        - $(tasks.remove-domain-from-email.results.username)-credentials-secret
+      taskRef:
+        kind: Task
+        name: tkn
+      when:
+      - input: $(tasks.status)
+        operator: in
+        values:
+        - Succeeded
+    params:
+    - default: git@github.com:linuxeroagrio/vm-pipeline.git
+      description: Toml file git repository
+      name: GIT_REPO_URL
+      type: string
+    - default: ./config.toml
+      description: Toml file relative path to git repository
+      name: TOML_FILE_RELATIVE_CONTEXT
+      type: string
+    - description: Complete user name
+      name: COMPLETE_USERNAME
+      type: string
+    - description: Virtual Machine user email
+      name: VIRTUAL_MACHINE_USER_EMAIL
+      type: string
+    - default: quay.io/linuxeroagrio/fedora-virtual-desktop
+      description: Virtual Desktop Image Name
+      name: VIRTUALMACHINE_IMAGE_NAME
+      type: string
+    - default: prod
+      description: Virtual Desktop Image Tag
+      name: VIRTUALMACHINE_IMAGE_TAG
+      type: string
+    - description: Virtual Machine namespace
+      name: VIRTUAL_MACHINE_NAMESPACE
+      type: string
+    - description: Virtual Machine admin user password
+      name: ADMINPASS
+      type: string
+    - description: Virtual Machine admin user ssh-public key
+      name: ADMINSSHPUBKEY
+      type: string
+    - description: Telegram bot token secret
+      name: TELEGRAM_BOT_TOKEN_SECRET
+      type: string
+    - description: Telegram chat id to send messages
+      name: TELEGRAM_CHAT_ID
+      type: string
+    tasks:
+    - name: get-toml-file
+      params:
+      - name: url
+        value: $(params.GIT_REPO_URL)
+      - name: revision
+        value: ""
+      - name: refspec
+        value: ""
+      - name: submodules
+        value: "true"
+      - name: depth
+        value: "1"
+      - name: sslVerify
+        value: "true"
+      - name: crtFileName
+        value: ca-bundle.crt
+      - name: subdirectory
+        value: ""
+      - name: sparseCheckoutDirectories
+        value: ""
+      - name: deleteExisting
+        value: "true"
+      - name: httpProxy
+        value: ""
+      - name: httpsProxy
+        value: ""
+      - name: noProxy
+        value: ""
+      - name: verbose
+        value: "true"
+      - name: gitInitImage
+        value: gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/git-init:v0.40.2
+      - name: userHome
+        value: /home/git
+      taskRef:
+        kind: Task
+        name: git-clone
+      workspaces:
+      - name: output
+        workspace: toml-repository
+      - name: ssh-directory
+        workspace: source-ssh-key
+    - name: remove-domain-from-email
+      params:
+      - name: EMAIL
+        value: $(params.VIRTUAL_MACHINE_USER_EMAIL)
+      - name: OS_IMAGE
+        value: quay.io/fedora/fedora:42
+      taskRef:
+        kind: Task
+        name: remove-domain-from-email
+    - name: generate-password
+      params:
+      - name: PASSWORD_LENGTH
+        value: "8"
+      - name: CHAR_FILTER
+        value: A-Za-z0-9
+      - name: OS_IMAGE
+        value: quay.io/fedora/fedora:42
+      taskRef:
+        kind: Task
+        name: generate-password
+    - name: customize-toml-file
+      params:
+      - name: COMPLETE_USERNAME
+        value: $(params.COMPLETE_USERNAME)
+      - name: USERNAME
+        value: $(tasks.remove-domain-from-email.results.username)
+      - name: USERPASS
+        value: $(tasks.generate-password.results.generated-password)
+      - name: ADMINPASS
+        value: $(params.ADMINPASS)
+      - name: ADMINSSHPUBKEY
+        value: $(params.ADMINSSHPUBKEY)
+      - name: TOML_FILE_RELATIVE_CONTEXT
+        value: $(params.TOML_FILE_RELATIVE_CONTEXT)
+      - name: OS_IMAGE
+        value: quay.io/fedora/fedora:42
+      runAfter:
+      - get-toml-file
+      - generate-password
+      - validate-if-vm-exists
+      taskRef:
+        kind: Task
+        name: customize-toml-file
+      workspaces:
+      - name: toml-file-repo
+        workspace: toml-repository
+    - name: build-user-iso
+      params:
+      - name: SOURCE_IMAGE
+        value: $(params.VIRTUALMACHINE_IMAGE_NAME)
+      - name: SOURCE_IMAGE_TAG
+        value: $(params.VIRTUALMACHINE_IMAGE_TAG)
+      - name: BUILDER_IMAGE
+        value: quay.io/centos-bootc/bootc-image-builder:latest
+      - name: DEST_FORMAT
+        value: iso
+      - name: ROOTFS_TYPE
+        value: xfs
+      - name: CONFIG_TOML_CONTENT
+        value: '""'
+      - name: WS_TOML_FILE
+        value: $(params.TOML_FILE_RELATIVE_CONTEXT)
+      - name: TLS_VERIFY
+        value: "true"
+      - name: AWS_AMI_NAME
+        value: ""
+      - name: AWS_S3_BUCKET
+        value: ""
+      - name: AWS_S3_REGION
+        value: ""
+      runAfter:
+      - customize-toml-file
+      taskRef:
+        kind: Task
+        name: bootc-image-builder
+      workspaces:
+      - name: toml-workspace
+        workspace: toml-repository
+      - name: main-workspace
+        workspace: user-vm-iso-image
+    - name: create-vm
+      params:
+      - name: helm_repo
+        value: https://linuxeroagrio.github.io/helm-charts
+      - name: chart_name
+        value: stable/virtual-desktop
+      - name: release_version
+        value: 1.0.0
+      - name: release_name
+        value: $(tasks.remove-domain-from-email.results.username)
+      - name: release_namespace
+        value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+      - name: overwrite_values
+        value: ""
+      - name: helm_image
+        value: docker.io/lachlanevenson/k8s-helm@sha256:0a068ae407e21d1836c6a89a1e9e81af1e55fa56890998e33d5caabdbb51e77b
+      runAfter:
+      - get-toml-file
+      - generate-password
+      - validate-if-vm-exists
+      taskRef:
+        kind: Task
+        name: helm-upgrade-from-repo
+    - name: upload-vm-iso
+      params:
+      - name: ARGS
+        value: image-upload pvc $(tasks.remove-domain-from-email.results.username)-virtual-desktop-iso-pvc
+          --size=5Gi --image-path=output/bootiso/install.iso --storage-class=lvms-vg1
+          --insecure --force-bind -n $(params.VIRTUAL_MACHINE_NAMESPACE)
+      - name: VIRTCTL_IMAGE
+        value: quay.io/linuxeroagrio/virtctl:4.19
+      runAfter:
+      - build-user-iso
+      - create-vm
+      - create-user-credentials-secret
+      taskRef:
+        kind: Task
+        name: virtctl-cli
+      workspaces:
+      - name: objects
+        workspace: user-vm-iso-image
+    - name: start-vm
+      params:
+      - name: ARGS
+        value: start -n $(params.VIRTUAL_MACHINE_NAMESPACE)  $(tasks.remove-domain-from-email.results.username)-virtualdesktop
+      - name: VIRTCTL_IMAGE
+        value: quay.io/linuxeroagrio/virtctl:4.19
+      runAfter:
+      - upload-vm-iso
+      taskRef:
+        kind: Task
+        name: virtctl-cli
+      workspaces:
+      - name: objects
+        workspace: toml-repository
+    - name: wait-for-vm-stop
+      params:
+      - name: SCRIPT
+        value: oc wait -n $(params.VIRTUAL_MACHINE_NAMESPACE) --timeout=2h0m0s --for=jsonpath='{.status.printableStatus}'=Stopped
+          virtualmachine/$(tasks.remove-domain-from-email.results.username)-virtualdesktop
+      - name: VERSION
+        value: "4.19"
+      runAfter:
+      - start-vm
+      taskRef:
+        kind: Task
+        name: openshift-client
+      timeout: 2h0m0s
+    - name: remove-vm-iso
+      params:
+      - name: SCRIPT
+        value: |-
+          oc patch vm $(tasks.remove-domain-from-email.results.username)-virtualdesktop -n $(params.VIRTUAL_MACHINE_NAMESPACE) --type='json' -p='[
+            {"op": "test", "path": "/spec/template/spec/domain/devices/disks/2/name", "value": "cdrom-custom-iso"},
+            {"op": "remove", "path": "/spec/template/spec/domain/devices/disks/2"},
+            {"op": "test", "path": "/spec/template/spec/volumes/2/name", "value": "cdrom-custom-iso"},
+            {"op": "remove", "path": "/spec/template/spec/volumes/2"}
+          ]'
+      - name: VERSION
+        value: "4.19"
+      runAfter:
+      - wait-for-vm-stop
+      taskRef:
+        kind: Task
+        name: openshift-client
+    - name: validate-if-vm-exists
+      params:
+      - name: SCRIPT
+        value: |-
+          oc get vm -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(tasks.remove-domain-from-email.results.username)-virtualdesktop
+          if [ "$?" == "0" ]
+          then
+            echo "Virtual Machine exists"
+            exit 1
+          else
+            echo "Virtual Machine does not exists"
+            exit 0
+          fi
+      - name: VERSION
+        value: "4.19"
+      runAfter:
+      - remove-domain-from-email
+      taskRef:
+        kind: Task
+        name: openshift-client
+    - name: create-user-credentials-secret
+      params:
+      - name: SCRIPT
+        value: oc create secret generic $(tasks.remove-domain-from-email.results.username)-credentials-secret
+          --from-literal=password=$(tasks.generate-password.results.generated-password)
+      - name: VERSION
+        value: "4.19"
+      runAfter:
+      - get-toml-file
+      - generate-password
+      - validate-if-vm-exists
+      taskRef:
+        kind: Task
+        name: openshift-client
+    workspaces:
+    - name: toml-repository
+    - name: source-ssh-key
+    - name: user-vm-iso-image
+kind: List
+metadata:
+  resourceVersion: ""
