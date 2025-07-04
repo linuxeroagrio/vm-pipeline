@@ -1,11 +1,13 @@
-[org.mate.session]
-idle-delay=5
+[org.gnome.desktop.screensaver]
+idle-activation-enabled='true'
+lock-delay='uint32 300'
+lock-enabled='true'
+logout-enabled='false'
 
-[org.mate.screensaver]
-lock-delay=0
-lock-enabled=true
+[org.gnome.desktop.session]
+idle-delay='uint32 300'
 
-[org.mate.power-manager]
-sleep-computer-ac=0
-sleep-display-ac=300
-button-power='shutdown'
+[org.gnome.settings-daemon.plugins.power]
+power-button-action='shutdown'
+sleep-inactive-ac-type='nothing'
+sleep-inactive-ac-timeout=0

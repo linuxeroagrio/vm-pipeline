@@ -1,2 +1,2 @@
-[org.mate.peripherals-keyboard-xkb.kbd]
-layouts=['latam']
+[org.gnome.desktop.input-sources]
+sources=[('xkb', 'latam')]

@@ -1,22 +1,28 @@
-[org.mate.background]
-picture-filename='/usr/share/backgrounds/linuxero-agrio-wallpaper.jpg'
+[org.gnome.desktop.wm.preferences]
+theme='Orchis-Compact'
+
+[org.gnome.desktop.interface]
+gtk-theme='Orchis-Compact'
+icon-theme='Tela'
+cursor-theme='Adwaita'
+
+[org.gnome.desktop.background]
+picture-uri='file:///usr/share/backgrounds/linuxero-agrio-wallpaper.jpg'
+picture-uri-dark='file:///usr/share/backgrounds/linuxero-agrio-wallpaper.jpg'
 picture-options='zoom'
 
-[org.mate.interface]
-gtk-theme='Mojave-Dark'
-icon-theme='McMojave-circle-dark'
+[org.gnome.shell]
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'dash-to-dock@micxgx.gmail.com', 'background-logo@fedorahosted.org']
+favorite-apps=['terminator.desktop', 'org.gnome.Nautilus.desktop', 'org.mozilla.firefox.desktop']
 
-[org.mate.peripherals-mouse]
-cursor-theme='mate'
+[org.gnome.shell.extensions.user-theme]
+name='Orchis-Compact'
 
-[org.mate.Marco.general]
-theme='Mojave-Dark'
+[org.gnome.shell.extensions.dash-to-dock]
+dash-max-icon-size='24'
+autohice='true'
+click-action='cycle-windows'
 
-[org.mate.applications-terminal]
+[org.gnome.desktop.default-applications.terminal]
 exec='terminator'
-
-[x.dm.slick-greeter]
-background='/usr/share/backgrounds/linuxero-agrio-wallpaper.jpg'
-cursor-theme-name='mate'
-icon-theme-name='McMojave-circle-dark'
-theme-name='Mojave-Dark'
+exec-arg='-x'

@@ -1,3 +1,0 @@
-#!/bin/sh
-set -x
-XDG_CURRENT_DESKTOP=MATE exec dbus-launch --exit-with-session mate-session
