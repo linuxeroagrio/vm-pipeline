@@ -1,0 +1,293 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  creationTimestamp: "2025-06-30T22:36:24Z"
+  generation: 30
+  name: prepare-user-virtualdesktop-pipeline
+  namespace: vm-pipelines
+  resourceVersion: "17011729"
+  uid: 398defcf-2f9d-4300-a5a4-980689531ad4
+spec:
+  finally:
+  - name: notify-error
+    params:
+    - name: bot-token-secret
+      value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+    - name: chat-id
+      value: $(params.TELEGRAM_CHAT_ID)
+    - name: message
+      value: Prepare virtual desktop for user $(params.USER_NAME) in error
+    taskRef:
+      kind: Task
+      name: send-to-telegram
+    when:
+    - input: $(tasks.status)
+      operator: in
+      values:
+      - Failed
+  - name: send-vnc-access
+    params:
+    - name: bot-token-secret
+      value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+    - name: chat-id
+      value: $(params.TELEGRAM_CHAT_ID)
+    - name: message
+      value: |-
+        Success provisioned your virtual desktop, access info bellow:\n
+        Username: $(tasks.get-vm-vnc-access-info.results.vnc-username) \n
+        Password: $(tasks.get-vm-vnc-access-info.results.vnc-userpass)\n
+        URL: $(tasks.get-vm-vnc-access-info.results.vnc-url)
+    taskRef:
+      kind: Task
+      name: send-to-telegram
+    when:
+    - input: $(tasks.status)
+      operator: in
+      values:
+      - Succeeded
+  params:
+  - description: Name of virtual machine
+    name: VIRTUAL_MACHINE_NAME
+    type: string
+  - description: Virtual Machine Namesapce
+    name: VIRTUAL_MACHINE_NAMESPACE
+    type: string
+  - description: Secret that contains admin user SSH Credentials
+    name: ADMIN_SSH_CREDENTIALS
+    type: string
+  - description: Regular User Name
+    name: USER_NAME
+    type: string
+  - description: Telegram bot token secret
+    name: TELEGRAM_BOT_TOKEN_SECRET
+    type: string
+  - description: Telegram chat id to send messages
+    name: TELEGRAM_CHAT_ID
+    type: string
+  tasks:
+  - name: validate-if-vm-exists
+    params:
+    - name: SCRIPT
+      value: |-
+        oc get vm -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+        if [ "$?" == "0" ]
+        then
+          echo "Virtual Machine exists"
+          exit 0
+        else
+          echo "Virtual Machine does not exists"
+          exit 1
+        fi
+    - name: VERSION
+      value: "4.19"
+    taskRef:
+      kind: Task
+      name: openshift-client
+  - name: start-vm
+    params:
+    - name: ARGS
+      value: start -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+    - name: VIRTCTL_IMAGE
+      value: quay.io/linuxeroagrio/virtctl:4.19
+    runAfter:
+    - validate-if-vm-exists
+    taskRef:
+      kind: Task
+      name: virtctl-cli
+  - name: wait-for-vm-running
+    params:
+    - name: vmiName
+      value: $(params.VIRTUAL_MACHINE_NAME)
+    - name: vmiNamespace
+      value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+    - name: successCondition
+      value: status.phase == Running
+    - name: failureCondition
+      value: status.phase in (Failed, Unknown)
+    runAfter:
+    - start-vm
+    - get-vm-vnc-access-info
+    taskRef:
+      kind: Task
+      name: wait-for-vmi-status
+  - name: enable-vnc-service
+    params:
+    - name: HOST
+      value: $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc
+    - name: USERNAME
+      value: $(params.USER_NAME)
+    - name: PORT
+      value: "22"
+    - name: SSH_SCRIPT
+      value: systemctl --user enable "kasmvnc@:1.service"
+    - name: USE_INSECURE_CIPHER
+      value: "false"
+    runAfter:
+    - wait-for-vm-running
+    - wait-for-ssh-port
+    taskRef:
+      kind: Task
+      name: remote-ssh-commands
+    workspaces:
+    - name: credentials
+      workspace: user-password-workspace
+  - name: wait-for-ssh-port
+    params:
+    - name: ARGS
+      value: |-
+        INDEX=0
+        ITERATIONS=60
+        SLEEP_TIME_SEC=1
+        while [ $INDEX -le $ITERATIONS ]
+        do
+          nc -zv $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc 22
+          if [ "$?" == "0" ]
+          then
+            exit 0
+          else
+            let INDEX=$INDEX+1
+            sleep ${SLEEP_TIME_SEC}
+          fi
+        done
+        exit 1
+    - name: NETTOOLS_IMAGE
+      value: image-registry.openshift-image-registry.svc:5000/openshift/network-tools:latest
+    runAfter:
+    - start-vm
+    - get-vm-vnc-access-info
+    taskRef:
+      kind: Task
+      name: net-tools
+  - name: enable-linger
+    params:
+    - name: vmName
+      value: $(params.VIRTUAL_MACHINE_NAME)
+    - name: vmNamespace
+      value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+    - name: secretName
+      value: $(params.ADMIN_SSH_CREDENTIALS)
+    - name: command
+      value: []
+    - name: args
+      value: []
+    - name: script
+      value: |-
+        sudo loginctl enable-linger $(params.USER_NAME)
+        sudo loginctl list-users | grep $(params.USER_NAME) | grep yes
+    runAfter:
+    - enable-vnc-service
+    - add-flathub
+    - create-vnc-password
+    taskRef:
+      kind: Task
+      name: execute-in-vm
+  - name: update-vm-runstrategy
+    params:
+    - name: SCRIPT
+      value: 'oc patch -n $(params.VIRTUAL_MACHINE_NAMESPACE) virtualmachine $(params.VIRTUAL_MACHINE_NAME)
+        --type=''json'' -p=''[{"op": "replace", "path": "/spec/runStrategy", "value":"Always"}]'''
+    - name: VERSION
+      value: "4.19"
+    runAfter:
+    - enable-vnc-service
+    - add-flathub
+    - create-vnc-password
+    taskRef:
+      kind: Task
+      name: openshift-client
+  - name: restart-vm
+    params:
+    - name: ARGS
+      value: restart -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+    - name: VIRTCTL_IMAGE
+      value: quay.io/linuxeroagrio/virtctl:4.19
+    runAfter:
+    - update-vm-runstrategy
+    - enable-linger
+    taskRef:
+      kind: Task
+      name: virtctl-cli
+  - name: wait-for-vnc-port
+    params:
+    - name: ARGS
+      value: |-
+        INDEX=0
+        ITERATIONS=60
+        SLEEP_TIME_SEC=1
+        while [ $INDEX -le $ITERATIONS ]
+        do
+          nc -zv $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc 8444
+          if [ "$?" == "0" ]
+          then
+            exit 0
+          else
+            let INDEX=$INDEX+1
+            sleep ${SLEEP_TIME_SEC}
+          fi
+        done
+        exit 1
+    - name: NETTOOLS_IMAGE
+      value: image-registry.openshift-image-registry.svc:5000/openshift/network-tools:latest
+    runAfter:
+    - restart-vm
+    taskRef:
+      kind: Task
+      name: net-tools
+  - name: get-vm-vnc-access-info
+    params:
+    - name: USERNAME
+      value: $(params.USER_NAME)
+    - name: VNC_ROUTE_NAMESPACE
+      value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+    - name: OS_IMAGE
+      value: quay.io/openshift/origin-cli:4.19
+    runAfter:
+    - validate-if-vm-exists
+    taskRef:
+      kind: Task
+      name: get-vm-vnc-access-info
+  - name: add-flathub
+    params:
+    - name: HOST
+      value: $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc
+    - name: USERNAME
+      value: $(params.USER_NAME)
+    - name: PORT
+      value: "22"
+    - name: SSH_SCRIPT
+      value: flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    - name: USE_INSECURE_CIPHER
+      value: "false"
+    runAfter:
+    - wait-for-vm-running
+    - wait-for-ssh-port
+    taskRef:
+      kind: Task
+      name: remote-ssh-commands
+    workspaces:
+    - name: credentials
+      workspace: user-password-workspace
+  - name: create-vnc-password
+    params:
+    - name: HOST
+      value: $(params.USER_NAME)-web-vnc.$(params.VIRTUAL_MACHINE_NAMESPACE).svc
+    - name: USERNAME
+      value: $(params.USER_NAME)
+    - name: PORT
+      value: "22"
+    - name: SSH_SCRIPT
+      value: echo -e \"$(tasks.get-vm-vnc-access-info.results.vnc-userpass)\\n$(tasks.get-vm-vnc-access-info.results.vnc-userpass)\\n\"
+        | vncpasswd -u $(params.USER_NAME) -o -w
+    - name: USE_INSECURE_CIPHER
+      value: "false"
+    runAfter:
+    - wait-for-vm-running
+    - wait-for-ssh-port
+    taskRef:
+      kind: Task
+      name: remote-ssh-commands
+    workspaces:
+    - name: credentials
+      workspace: user-password-workspace
+  workspaces:
+  - name: user-password-workspace
