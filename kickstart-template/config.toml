@@ -44,8 +44,9 @@ poweroff
 
 %post --erroronfail --log /var/roothome/post-config.log
 
-# Set multi-user default target
-systemctl set-default multi-user.target
+# Hidden admin user from GDM
+echo '[User]' > /var/lib/AccountsService/users/admin
+echo 'SystemAccount=true' >> /var/lib/AccountsService/users/admin
 
 %end
 
