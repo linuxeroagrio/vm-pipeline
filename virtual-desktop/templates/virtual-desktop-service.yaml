@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-virtualdesktop
+spec:
+  ports:
+  - name: {{ .Values.service.name | default "rdp" }}
+    port: {{ .Values.service.port | default 3389 }}
+    protocol: TCP
+    targetPort: {{ .Values.service.port | default 3389 }}
+  - name: ssh
+    port: 22
+    protocol: TCP
+    targetPort: 22
+  selector:
+    remote-desktop-user: {{ .Release.Name }}
+  type: ClusterIP
+  clusterIP: None

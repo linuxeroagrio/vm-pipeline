@@ -6,10 +6,10 @@ virtualMachineResources:
   cdrom:
     tray: closed
 
-# Exposed VNC Service Port
+# Exposed RDP Service Port
 service:
-  port: 8444
-  name: vnc
+  port: 3389
+  name: rdp
 
 # Disks configuration
 storage:
