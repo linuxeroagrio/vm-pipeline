@@ -8,10 +8,11 @@ COPY --chown=0:0 custom-theme/themes /usr/share/themes/
 COPY --chown=0:0 custom-theme/icons /usr/share/icons/
 COPY --chown=0:0 custom-theme/wallpaper /usr/share/backgrounds/
 COPY --chown=0:0 skel /etc/skel/
-#COPY --chown=0:0 bin /usr/local/bin/
+COPY --chown=0:0 bin /usr/local/bin/
 
 RUN dnf -y install @workstation-product \
                    @firefox \
+                   qemu-guest-agent \
                    nautilus \
                    nautilus-extensions \
                    gnome-remote-desktop \

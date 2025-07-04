@@ -19,66 +19,54 @@ echo -e "\t\tValidation Test"
 
 echo -e "########################################################"
 echo -e "\tValidating keyboard layout"
-KEYBOARD_LAYOUT=$(gsettings get org.mate.peripherals-keyboard-xkb.kbd layouts)
-echo -e "Keyboard layoiut value: ${KEYBOARD_LAYOUT}"
-COMPARE_STRINGS ${KEYBOARD_LAYOUT} "['latam']"
+KEYBOARD_LAYOUT=$(gsettings get org.gnome.desktop.input-sources sources)
+echo -e "Keyboard layout value: ${KEYBOARD_LAYOUT}"
+COMPARE_STRINGS "${KEYBOARD_LAYOUT}" "[('xkb', 'latam')]"
 
 echo -e "########################################################"
 echo -e "\tValidating screenlock values"
-IDLE_DELAY=$(gsettings get org.mate.session idle-delay)
+IDLE_DELAY=$(gsettings get org.gnome.desktop.session idle-delay)
 echo -e "Idle delay value: ${IDLE_DELAY}"
-COMPARE_STRINGS ${IDLE_DELAY} "5"
-LOCK_DELAY=$(gsettings get org.mate.screensaver lock-delay)
-echo -e "Lock delay value: ${LOCK_DELAY}"
-COMPARE_STRINGS ${LOCK_DELAY} "0"
-LOCK_ENABLED=$(gsettings get org.mate.screensaver lock-enabled)
+COMPARE_STRINGS "${IDLE_DELAY}" "uint32 300"
+LOCK_ENABLED=$(gsettings get org.gnome.desktop.screensaver lock-enabled)
 echo -e "Lock enabled value: ${LOCK_ENABLED}"
-COMPARE_STRINGS ${LOCK_ENABLED} "true"
-SLEEP_COMPUTER_AC_TIME=$(gsettings get org.mate.power-manager sleep-computer-ac)
-echo -e "Sleep computer AC time seconds value: ${SLEEP_COMPUTER_AC_TIME}"
-COMPARE_STRINGS ${SLEEP_COMPUTER_AC_TIME} "0"
-SLEEP_DISPLAY_AC_TIME=$(gsettings get org.mate.power-manager sleep-display-ac)
-echo -e "Sleep display AC time seconds value: ${SLEEP_DISPLAY_AC_TIME}"
-COMPARE_STRINGS ${SLEEP_DISPLAY_AC_TIME} "300"
-BUTTON_POWER_ACTION=$(gsettings get org.mate.power-manager button-power)
-echo -e "Power button action value: ${BUTTON_POWER_ACTION}"
-COMPARE_STRINGS ${BUTTON_POWER_ACTION} "'shutdown'"
+COMPARE_STRINGS "${LOCK_ENABLED}" "true"
+IDLE_ACTIVATION_ENABLED=$(gsettings get org.gnome.desktop.screensaver idle-activation-enabled)
+echo -e "Idle activation enabled value: ${IDLE_ACTIVATION_ENABLED}"
+COMPARE_STRINGS "${IDLE_ACTIVATION_ENABLED}" "true"
+LOGOUT_ENABLED=$(gsettings get org.gnome.desktop.screensaver logout-enabled)
+echo -e "Logout enabled value: ${LOGOUT_ENABLED}"
+COMPARE_STRINGS "${LOGOUT_ENABLED}" "false"
+SLEEP_INACTIVE_AC_TYPE=$(gsettings get org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type)
+echo -e "Sleep inactive AC type value: ${SLEEP_INACTIVE_AC_TYPE}"
+COMPARE_STRINGS "${SLEEP_INACTIVE_AC_TYPE}" "'nothing'"
 
 echo -e "########################################################"
 echo -e "\tValidating desktop theme values"
-BACKGROUND_PICTURE_FILENAME=$(gsettings get org.mate.background picture-filename)
+BACKGROUND_PICTURE_FILENAME=$(gsettings get org.gnome.desktop.background picture-uri)
 echo -e "Background picture file value: ${BACKGROUND_PICTURE_FILENAME}"
-COMPARE_STRINGS ${BACKGROUND_PICTURE_FILENAME} "'/usr/share/backgrounds/linuxero-agrio-wallpaper.jpg'"
-BACKGROUND_PICTURE_OPTIONS=$(gsettings get org.mate.background picture-options)
+COMPARE_STRINGS "${BACKGROUND_PICTURE_FILENAME}" "'file:///usr/share/backgrounds/linuxero-agrio-wallpaper.jpg'"
+BACKGROUND_PICTURE_OPTIONS=$(gsettings get org.gnome.desktop.background picture-options)
 echo -e "Background picture options value: ${BACKGROUND_PICTURE_OPTIONS}"
-COMPARE_STRINGS ${BACKGROUND_PICTURE_OPTIONS} "'zoom'"
-INTERFACE_THEME=$(gsettings get org.mate.interface gtk-theme)
+COMPARE_STRINGS "${BACKGROUND_PICTURE_OPTIONS}" "'zoom'"
+INTERFACE_THEME=$(gsettings get org.gnome.desktop.interface gtk-theme)
 echo -e "Interface theme value: ${INTERFACE_THEME}"
-COMPARE_STRINGS ${INTERFACE_THEME} "'Mojave-Dark'"
-INTERFACE_ICON_THEME=$(gsettings get org.mate.interface icon-theme)
+COMPARE_STRINGS "${INTERFACE_THEME}" "'Orchis-Compact'"
+INTERFACE_ICON_THEME=$(gsettings get org.gnome.desktop.interface icon-theme)
 echo -e "Interface icon theme value: ${INTERFACE_ICON_THEME}"
-COMPARE_STRINGS ${INTERFACE_ICON_THEME} "'McMojave-circle-dark'"
-CURSOR_THEME=$(gsettings get org.mate.peripherals-mouse cursor-theme)
+COMPARE_STRINGS "${INTERFACE_ICON_THEME}" "'Tela'"
+CURSOR_THEME=$(gsettings get org.gnome.desktop.interface cursor-theme)
 echo -e "Cursor theme value: ${CURSOR_THEME}"
-COMPARE_STRINGS ${CURSOR_THEME} "'mate'"
-WM_THEME=$(gsettings get org.mate.Marco.general theme)
+COMPARE_STRINGS "${CURSOR_THEME}" "'Adwaita'"
+WM_THEME=$(gsettings get org.gnome.desktop.wm.preferences theme)
 echo -e "Window manager theme value: ${WM_THEME}"
-COMPARE_STRINGS ${WM_THEME} "'Mojave-Dark'"
-DEFAULT_TERMINAL=$(gsettings get org.mate.applications-terminal exec)
+COMPARE_STRINGS "${WM_THEME}" "'Orchis-Compact'"
+SHELL_THEME=$(gsettings get org.gnome.shell.extensions.user-theme name)
+echo -e "Shell manager theme value: ${SHELL_THEME}"
+COMPARE_STRINGS "${SHELL_THEME}" "'Orchis-Compact'"
+DEFAULT_TERMINAL=$(gsettings get org.gnome.desktop.default-applications.terminal exec)
 echo -e "Default terminal value: ${DEFAULT_TERMINAL}"
-COMPARE_STRINGS ${DEFAULT_TERMINAL} "'terminator'"
-DISPLAYMANAGER_BACKGROUND=$(gsettings get x.dm.slick-greeter background)
-echo -e "Display manager background value: ${DISPLAYMANAGER_BACKGROUND}"
-COMPARE_STRINGS ${DISPLAYMANAGER_BACKGROUND} "'/usr/share/backgrounds/linuxero-agrio-wallpaper.jpg'"
-DISPLAYMANAGER_CURSOR_THEME=$(gsettings get x.dm.slick-greeter cursor-theme-name)
-echo -e "Display manager cursor theme value: ${DISPLAYMANAGER_CURSOR_THEME}"
-COMPARE_STRINGS ${DISPLAYMANAGER_CURSOR_THEME} "'mate'"
-DISPLAYMANAGER_ICON_THEME=$(gsettings get x.dm.slick-greeter icon-theme-name)
-echo -e "Display manager icon theme value: ${DISPLAYMANAGER_ICON_THEME}"
-COMPARE_STRINGS ${DISPLAYMANAGER_ICON_THEME} "'McMojave-circle-dark'"
-DISPLAYMANAGER_THEME=$(gsettings get x.dm.slick-greeter theme-name)
-echo -e "Display manager theme value: ${DISPLAYMANAGER_THEME}"
-COMPARE_STRINGS ${DISPLAYMANAGER_THEME} "'Mojave-Dark'"
+COMPARE_STRINGS "${DEFAULT_TERMINAL}" "'terminator'"
 
 echo -e "########################################################"
 echo -e "\tValidating bootc upgrade timer"
@@ -91,18 +79,6 @@ else
 fi
 
 echo -e "########################################################"
-echo -e "\tValidating internal certificate"
-curl -s https://console-openshift-console.apps.sno.linuxero-agrio.com.mx
-if [ "${?}" == "0" ]
-then
-  echo -e ""
-  echo -e "Internal CA: ${GREEN}PRESENT${RESET}"
-else
-  echo -e ""
-  echo -e "Internal CA: ${RED}ABSENT${RESET}"
-fi
-
-echo -e "########################################################"
 echo -e "\tValidating skel files and derectorios"
 if [ -d "${HOME}/.oh-my-bash" ]
 then
@@ -110,20 +86,16 @@ then
 else
   echo -e "Directory ${HOME}/.oh-my-bash: ${RED}ABSENT${RESET}"
 fi
-for FILE in ${HOME}/.vnc/.de-was-selected ${HOME}/.vnc/kasmvnc.yaml ${HOME}/.vnc/xstartup ${HOME}/.config/systemd/user/kasmvnc@\:1.service
-do
-  if [ -f "${FILE}" ]
-  then
-    echo -e "File ${FILE}: ${GREEN}PRESENT${RESET}"
-  else
-    echo -e "File ${FILE}: ${RED}ABSENT${RESET}"
-  fi
-done
+
+echo -e "########################################################"
 echo -e "\tValidating installed packages and groups"
-DE_INSTALLED=$(dnf group info mate-desktop | grep Installed | awk '{print $3}')
+DE_INSTALLED=$(dnf group info workstation-product | grep Installed | awk '{print $3}')
 echo -e "Desktop Environment group installed value: ${DE_INSTALLED}"
-COMPARE_STRINGS ${DE_INSTALLED} "yes"
-for PACKAGE in qemu-guest-agent spice-vdagent spice-webdavd firewalld flatpak fastfetch vim-enhanced terminator git dbus-x11 kasmvncserver
+COMPARE_STRINGS "${DE_INSTALLED}" "yes"
+WEB_EXPLORER_INSTALLED=$(dnf group info firefox | grep Installed | awk '{print $3}')
+echo -e "Web explorer group installed value: ${WEB_EXPLORER_INSTALLED}"
+COMPARE_STRINGS "${WEB_EXPLORER_INSTALLED}" "yes"
+for PACKAGE in qemu-guest-agent nautilus nautilus-extensions gnome-remote-desktop freerdp spice-vdagent spice-webdavd firewalld flatpak fastfetch vim-enhanced terminator git gnome-tweaks gnome-extensions-app gnome-shell-extension-user-theme gnome-shell-extension-dash-to-dock gnome-shell-extension-background-logo
 do
   rpm -q ${PACKAGE}
   COMPARE_STRINGS "${?}" "0"
