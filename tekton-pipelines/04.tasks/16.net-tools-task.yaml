@@ -1,0 +1,26 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: net-tools
+  namespace: vm-pipelines
+spec:
+  description: Provides net tools
+  params:
+  - description: The Arguments to be passed.
+    name: ARGS
+    type: string
+  - default: image-registry.openshift-image-registry.svc:5000/openshift/network-tools:latest
+    description: Image to be used
+    name: NETTOOLS_IMAGE
+    type: string
+  steps:
+  - computeResources: {}
+    image: $(params.NETTOOLS_IMAGE)
+    name: net-tools
+    script: |
+      #!/usr/bin/env bash
+      $(params.ARGS)
+    workingDir: $(workspaces.objects.path)
+  workspaces:
+  - name: objects
+    optional: true

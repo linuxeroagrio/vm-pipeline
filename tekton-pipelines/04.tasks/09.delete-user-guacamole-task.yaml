@@ -1,0 +1,65 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: delete-user-guacamole
+  namespace: vm-pipelines
+spec:
+  params:
+  - description: Secret that contains guacamole user and password
+    name: GUACAMOLE_CREDENTIALS
+    type: string
+  - description: Guacamole base URL
+    name: GUACAMOLE_URL
+    type: string
+  - default: postgresql
+    description: Guacamole database
+    name: GUACAMOLE_DATASOURCE
+    type: string
+  - description: Guacamole user to delete
+    name: USERNAME
+    type: string
+  steps:
+  - computeResources: {}
+    env:
+    - name: GUACAMOLE_USER
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_USER
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_PASSWORD
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    image: quay.io/linuxeroagrio/guacamole-api-wrapper:python-3.13
+    name: delete-guacamole-user
+    script: |
+      #!/usr/bin/env python3
+      import guacamole
+      import os
+      import sys
+
+      # GLOBAL VARS
+      guacamole_base_url = '$(params.GUACAMOLE_URL)'
+      datasource         = '$(params.GUACAMOLE_DATASOURCE)'
+      guac_username      =  os.getenv('GUACAMOLE_USER', '')
+      guac_password      =  os.getenv('GUACAMOLE_PASSWORD', '')
+      user_name          = "$(params.USERNAME)"
+
+      # Connect to guacamole
+      try:
+        session = guacamole.session(guacamole_base_url, datasource, guac_username, guac_password)
+      except Exception as e:
+        error_message = "An error occured establishing a Guacamole API Session object"
+        print(f"{error_message}", {e})
+        sys.exit(1)
+      # Delete user
+      try:
+        print("Deleting guacamole user")
+        session.delete_user(username=user_name)
+        print("User" , user_name, "deleted")
+        sys.exit(0)
+      except Exception as e:
+        error_message = "An error occured when deleting user"
+        print(f"{error_message}", {e})
+        sys.exit(1)

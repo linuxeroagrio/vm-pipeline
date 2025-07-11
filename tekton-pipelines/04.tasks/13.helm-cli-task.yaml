@@ -1,0 +1,26 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: helm-cli
+  namespace: vm-pipelines
+spec:
+  description: Provides Helm CLI
+  params:
+  - description: The Arguments to be passed to helm command.
+    name: ARGS
+    type: string
+  - default: quay.io/linuxeroagrio/helm:4.19
+    description: Helm image to be used
+    name: VIRTCTL_IMAGE
+    type: string
+  steps:
+  - computeResources: {}
+    image: $(params.VIRTCTL_IMAGE)
+    name: helm-cli
+    script: |
+      #!/usr/bin/env bash
+      helm $(params.ARGS)
+    workingDir: $(workspaces.objects.path)
+  workspaces:
+  - name: objects
+    optional: true

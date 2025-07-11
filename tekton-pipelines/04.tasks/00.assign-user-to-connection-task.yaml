@@ -1,0 +1,80 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: assign-user-to-connection
+  namespace: vm-pipelines
+spec:
+  params:
+  - description: Secret that contains guacamole user and password
+    name: GUACAMOLE_CREDENTIALS
+    type: string
+  - description: Guacamole base URL
+    name: GUACAMOLE_URL
+    type: string
+  - default: postgresql
+    description: Guacamole database
+    name: GUACAMOLE_DATASOURCE
+    type: string
+  - description: User to add oor remove connection
+    name: USERNAME
+    type: string
+  - description: Connection identifier to ad or remove
+    name: CONNECTION_ID
+    type: string
+  - default: add
+    description: Add ('add') or remove ('remove') operation
+    name: OPERATION
+    type: string
+  - default: connection
+    description: Permission level
+    name: PERMISSION
+    type: string
+  steps:
+  - computeResources: {}
+    env:
+    - name: GUACAMOLE_USER
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_USER
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_PASSWORD
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    image: quay.io/linuxeroagrio/guacamole-api-wrapper:python-3.13
+    name: grant-connection-perms
+    script: |
+      #!/usr/bin/env python3
+      import guacamole
+      import os
+      import sys
+
+      # GLOBAL VARS
+      guacamole_base_url           = '$(params.GUACAMOLE_URL)'
+      datasource                   = '$(params.GUACAMOLE_DATASOURCE)'
+      guac_username                =  os.getenv('GUACAMOLE_USER', '')
+      guac_password                =  os.getenv('GUACAMOLE_PASSWORD', '')
+      user_name                    = "$(params.USERNAME)"
+      connection_id                = "$(params.CONNECTION_ID)"
+      operation                    = "$(params.OPERATION)"
+      permission                   = "$(params.PERMISSION)"
+
+      # Connect to guacamole
+      try:
+        session = guacamole.session(guacamole_base_url, datasource, guac_username, guac_password)
+      except Exception as e:
+        error_message = "An error occured establishing a Guacamole API Session object"
+        print(f"{error_message}", {e})
+        sys.exit(1)
+
+      # Assign connection
+      try:
+        print(operation, "connection read", connection_id, "to user", user_name)
+        grant_connection_to_user_result = session.update_connection_permissions(username=user_name, identifiers=connection_id, operation=operation, permission=permission)
+        print("Grant succeded")
+        sys.exit(0)
+      except Exception as e:
+        error_message = "An error occured when assign permissions"
+        print(f"{error_message}", {e})
+        sys.exit(1)

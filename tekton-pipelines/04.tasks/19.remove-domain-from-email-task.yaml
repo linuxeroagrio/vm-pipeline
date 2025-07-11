@@ -1,0 +1,41 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: remove-domain-from-email
+  namespace: vm-pipelines
+spec:
+  description: Upload a disk image for use in vm
+  params:
+  - description: The user emial address
+    name: EMAIL
+    type: string
+  - default: quay.io/fedora/fedora:42
+    description: OS image to be used
+    name: OS_IMAGE
+    type: string
+  results:
+  - description: |
+      name from email
+    name: username
+    type: string
+  steps:
+  - computeResources: {}
+    image: $(params.OS_IMAGE)
+    name: remove-email-from-email
+    script: |
+      #!/usr/bin/env bash
+
+      #Validate email structure
+      EMAIL="$(params.EMAIL)"
+      echo "$EMAIL"
+      regex="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      if [[ $EMAIL =~ $regex ]]; then
+        #Separate username
+        echo "Valid email format"
+        USERNAME="${EMAIL%@*}"
+        echo "The username from e-mail ${EMAIL} is: ${USERNAME}"
+        printf "%s" "${USERNAME}" > "$(results.username.path)"
+      else
+        echo "Invalid email format"
+        exit 1
+      fi

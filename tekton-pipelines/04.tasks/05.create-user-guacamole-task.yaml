@@ -1,0 +1,99 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: create-user-guacamole
+  namespace: vm-pipelines
+spec:
+  params:
+  - description: Secret that contains guacamole user and password
+    name: GUACAMOLE_CREDENTIALS
+    type: string
+  - description: Guacamole base URL
+    name: GUACAMOLE_URL
+    type: string
+  - default: postgresql
+    description: Guacamole database
+    name: GUACAMOLE_DATASOURCE
+    type: string
+  - description: New user name
+    name: NEWUSER_NAME
+    type: string
+  - description: New user password
+    name: NEWUSER_PASSWORD
+    type: string
+  - description: New user full name
+    name: NEWUSER_FULLNAME
+    type: string
+  - description: New user organization
+    name: NEWUSER_ORGANIZATION
+    type: string
+  - description: New user role
+    name: NEWUSER_ROLE
+    type: string
+  - description: New user timezone
+    name: NEWUSER_TIMEZONE
+    type: string
+  results:
+  - description: New user name
+    name: newuser-name
+    type: string
+  steps:
+  - computeResources: {}
+    env:
+    - name: GUACAMOLE_USER
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_USER
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_PASSWORD
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    image: quay.io/linuxeroagrio/guacamole-api-wrapper:python-3.13
+    name: create-guacamole-user
+    script: |
+      #!/usr/bin/env python3
+      import guacamole
+      import os
+      import sys
+
+      # GLOBAL VARS
+      guacamole_base_url = '$(params.GUACAMOLE_URL)'
+      datasource         = '$(params.GUACAMOLE_DATASOURCE)'
+      guac_username      =  os.getenv('GUACAMOLE_USER', '')
+      guac_password      =  os.getenv('GUACAMOLE_PASSWORD', '')
+      user_name          = "$(params.NEWUSER_NAME)"
+      user_password      = "$(params.NEWUSER_PASSWORD)"
+      user_fullname      = "$(params.NEWUSER_FULLNAME)"
+      user_organization  = "$(params.NEWUSER_ORGANIZATION)"
+      user_role          = "$(params.NEWUSER_ROLE)"
+      user_timezone      = "$(params.NEWUSER_TIMEZONE)"
+
+      # Connect to guacamole
+      try:
+        session = guacamole.session(guacamole_base_url, datasource, guac_username, guac_password)
+      except Exception as e:
+        error_message = "An error occured establishing a Guacamole API Session object"
+        print(f"{error_message}", {e})
+        sys.exit(1)
+
+      # Define user params
+      new_user_attributes = {
+        "guac-full-name": user_fullname,
+        "guac-organization" : user_organization,
+        "guac-organizational-role" : user_role,
+        "timezone" : user_timezone
+      }
+      # Create user
+      try:
+        print("Creating new guacamole user")
+        new_username=session.create_user(username=user_name ,password=user_password, attributes=new_user_attributes)['username']
+        with open("$(results.newuser-name.path)", "w") as f:
+                f.write(new_username)
+        print("User" , new_username, "created")
+        sys.exit(0)
+      except Exception as e:
+        error_message = "An error occured when creating user"
+        print(f"{error_message}", {e})
+        sys.exit(1)

@@ -1,0 +1,135 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: create-rdp-connection-guacamole
+  namespace: vm-pipelines
+spec:
+  params:
+  - description: Secret that contains guacamole user and password
+    name: GUACAMOLE_CREDENTIALS
+    type: string
+  - description: Guacamole base URL
+    name: GUACAMOLE_URL
+    type: string
+  - default: postgresql
+    description: Guacamole database
+    name: GUACAMOLE_DATASOURCE
+    type: string
+  - description: Guacamole connection name
+    name: GUACAMOLE_CONNECTION_NAME
+    type: string
+  - description: RDP Hostname
+    name: RDP_HOSTNAME
+    type: string
+  - description: RDP User
+    name: RDP_USER
+    type: string
+  - description: RDP Password
+    name: RDP_PASSWORD
+    type: string
+  - default: "3389"
+    description: RDP Port
+    name: RDP_PORT
+    type: string
+  - description: RDP TimeZone
+    name: RDP_TZ
+    type: string
+  - default: "1920"
+    description: RDP Screen Width
+    name: RDP_WIDTH
+    type: string
+  - description: RDP Keyboard layout
+    name: RDP_KEYBOARDLAYOUT
+    type: string
+  - default: "1080"
+    description: RDP Screen Height
+    name: RDP_HEIGHT
+    type: string
+  - default: "1"
+    description: RDP Max Connections
+    name: RDP_MAXCONNECTIONS
+    type: string
+  - default: "1"
+    description: RDP Max Connections Per User
+    name: RDP_MAXCONNECTIONSPERUSER
+    type: string
+  results:
+  - description: RDP Connection ID
+    name: connection-id
+    type: string
+  steps:
+  - computeResources: {}
+    env:
+    - name: GUACAMOLE_USER
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_USER
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          key: GUACAMOLE_PASSWORD
+          name: $(params.GUACAMOLE_CREDENTIALS)
+    image: quay.io/linuxeroagrio/guacamole-api-wrapper:python-3.13
+    name: create-guacamole-rdp-connection
+    script: |
+      #!/usr/bin/env python3
+      import guacamole
+      import os
+      import sys
+
+      # GLOBAL VARS
+      guacamole_base_url           = '$(params.GUACAMOLE_URL)'
+      datasource                   = '$(params.GUACAMOLE_DATASOURCE)'
+      guac_username                =  os.getenv('GUACAMOLE_USER', '')
+      guac_password                =  os.getenv('GUACAMOLE_PASSWORD', '')
+      rdp_hostname                 = "$(params.RDP_HOSTNAME)"
+      rdp_user                     = "$(params.RDP_USER)"
+      rdp_password                 = "$(params.RDP_PASSWORD)"
+      rdp_port                     = "$(params.RDP_PORT)"
+      rdp_timezone                 = "$(params.RDP_TZ)"
+      rdp_width                    = "$(params.RDP_WIDTH)"
+      rdp_keyboard_layout          = "$(params.RDP_KEYBOARDLAYOUT)"
+      rdp_height                   = "$(params.RDP_HEIGHT)"
+      rdp_max_connections          = "$(params.RDP_MAXCONNECTIONS)"
+      rdp_max_connections_per_user = "$(params.RDP_MAXCONNECTIONSPERUSER)"
+
+      # Connect to guacamole
+      try:
+        session = guacamole.session(guacamole_base_url, datasource, guac_username, guac_password)
+      except Exception as e:
+        error_message = "An error occured establishing a Guacamole API Session object"
+        print(f"{error_message}", {e})
+        sys.exit(1)
+
+      # Define connection params
+      new_connection_params = {
+        "hostname": rdp_hostname,
+        "password" : rdp_password,
+        "ignore-cert" : "true",
+        "port" : rdp_port,
+        "timezone" : rdp_timezone,
+        "width" : rdp_width,
+        "server-layout" : rdp_keyboard_layout,
+        "height" : rdp_height,
+        "username" : rdp_user
+      }
+
+      # Define connection attributes
+      new_connection_attributes = {
+        "max-connections" : rdp_max_connections,
+        "max-connections-per-user" : rdp_max_connections_per_user
+      }
+
+      # Create connection
+      try:
+        print("Creating new guacamole connection")
+        new_connection_id = session.manage_connection(protocol="rdp",name="$(params.GUACAMOLE_CONNECTION_NAME)",parameters=new_connection_params,attributes=new_connection_attributes)['identifier']
+        with open("$(results.connection-id.path)", "w") as f:
+                f.write(new_connection_id)
+        print("Connection created")
+        sys.exit(0)
+      except Exception as e:
+        error_message = "An error occured creating a guacamole connection"
+        print(f"{error_message}", {e})
+        sys.exit(1)

@@ -1,0 +1,62 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  annotations:
+    artifacthub.io/category: integration-delivery
+    artifacthub.io/maintainers: |
+      - name: KubeVirt Tekton tasks maintainers
+        email: kubevirt-tekton-tasks@redhat.com
+    artifacthub.io/provider: KubeVirt
+    artifacthub.io/recommendations: |
+      - url: https://kubevirt.io/
+    tekton.dev/categories: Automation
+    tekton.dev/displayName: KubeVirt wait for VMI status
+    tekton.dev/pipelines.minVersion: 0.43.0
+    tekton.dev/platforms: linux/amd64
+    tekton.dev/tags: kubevirt
+  labels:
+    app.kubernetes.io/version: v0.24.0
+  name: wait-for-vmi-status
+  namespace: vm-pipelines
+spec:
+  description: This tasks waits until KubeVirt virtual machine is in some  state.
+    It can be used in pipeline where user needs to wait until e.g.  VM finish some
+    installation.
+  params:
+  - description: Name of a VirtualMachineInstance to wait for.
+    name: vmiName
+    type: string
+  - default: ""
+    description: Namespace of a VirtualMachineInstance to wait for. (defaults to manifest
+      namespace or active namespace)
+    name: vmiNamespace
+    type: string
+  - default: ""
+    description: A label selector expression to decide if the VirtualMachineInstance
+      (VMI) is in a success state. Eg. "status.phase == Succeeded". It is evaluated
+      on each VMI update and will result in this task succeeding if true.
+    name: successCondition
+    type: string
+  - default: ""
+    description: A label selector expression to decide if the VirtualMachineInstance
+      (VMI) is in a failed state. Eg. "status.phase in (Failed, Unknown)". It is evaluated
+      on each VMI update and will result in this task failing if true.
+    name: failureCondition
+    type: string
+  steps:
+  - command:
+    - entrypoint
+    computeResources: {}
+    env:
+    - name: COMMAND
+      value: wait-for-vmi-status
+    - name: VMI_NAME
+      value: $(params.vmiName)
+    - name: VMI_NAMESPACE
+      value: $(params.vmiNamespace)
+    - name: SUCCESS_CONDITION
+      value: $(params.successCondition)
+    - name: FAILURE_CONDITION
+      value: $(params.failureCondition)
+    image: quay.io/kubevirt/tekton-tasks:v0.24.0
+    name: wait-for-vmi-status

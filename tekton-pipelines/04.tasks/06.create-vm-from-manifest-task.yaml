@@ -1,0 +1,90 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  annotations:
+    artifacthub.io/category: integration-delivery
+    artifacthub.io/maintainers: |
+      - name: KubeVirt Tekton tasks maintainers
+        email: kubevirt-tekton-tasks@redhat.com
+    artifacthub.io/provider: KubeVirt
+    artifacthub.io/recommendations: |
+      - url: https://kubevirt.io/
+    tekton.dev/categories: Automation
+    tekton.dev/displayName: KubeVirt create VM from manifest
+    tekton.dev/pipelines.minVersion: 0.43.0
+    tekton.dev/platforms: linux/amd64
+    tekton.dev/tags: kubevirt
+  labels:
+    app.kubernetes.io/version: v0.24.0
+  name: create-vm-from-manifest
+  namespace: vm-pipelines
+spec:
+  description: Automates creation of the KubeVirt virtual machine. User can create
+    VM from manifest or with the same parameters as for virtctl. It is possible to
+    immediatelly start the vm after creation with startVM parameter.
+  params:
+  - default: ""
+    description: YAML manifest of a VirtualMachine resource to be created.
+    name: manifest
+    type: string
+  - default: ""
+    description: Parameters for virtctl create vm command that will be used to create
+      VirtualMachine.
+    name: virtctl
+    type: string
+  - default: ""
+    description: Namespace where to create the VM. (defaults to manifest namespace
+      or active namespace)
+    name: namespace
+    type: string
+  - default: ""
+    description: Set to true or false to start / not start vm after creation. In case
+      of runStrategy is set to Always, startVM flag is ignored.
+    name: startVM
+    type: string
+  - default: ""
+    description: Set runStrategy to VM. If runStrategy is set, vm.spec.running attribute
+      is set to nil.
+    name: runStrategy
+    type: string
+  - default: "false"
+    description: Set owner reference to the new object created by the task run pod.
+      Allowed values true/false
+    name: setOwnerReference
+    type: string
+  results:
+  - description: The name of a VM that was created.
+    name: name
+    type: string
+  - description: The namespace of a VM that was created.
+    name: namespace
+    type: string
+  steps:
+  - args:
+    - --output=yaml
+    command:
+    - create-vm
+    computeResources: {}
+    env:
+    - name: VM_MANIFEST
+      value: $(params.manifest)
+    - name: VM_NAMESPACE
+      value: $(params.namespace)
+    - name: VIRTCTL
+      value: $(params.virtctl)
+    - name: START_VM
+      value: $(params.startVM)
+    - name: SET_OWNER_REFERENCE
+      value: $(params.setOwnerReference)
+    - name: RUN_STRATEGY
+      value: $(params.runStrategy)
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    image: quay.io/kubevirt/tekton-tasks:v0.24.0
+    name: createvm

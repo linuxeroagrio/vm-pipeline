@@ -1,0 +1,66 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: customize-toml-file
+  namespace: vm-pipelines
+spec:
+  description: Customize Kickstart Toml file
+  params:
+  - default: This is test user complete name
+    description: Complete user name
+    name: COMPLETE_USERNAME
+    type: string
+  - default: test-user
+    description: Username
+    name: USERNAME
+    type: string
+  - default: test-password
+    description: User password
+    name: USERPASS
+    type: string
+  - default: admin-password
+    description: Admin user password
+    name: ADMINPASS
+    type: string
+  - default: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC6eZ8... user@host
+    description: Admin user ssh public key
+    name: ADMINSSHPUBKEY
+    type: string
+  - default: ./config.toml
+    description: Relative path to toml file in toml-file-repo worskpace
+    name: TOML_FILE_RELATIVE_CONTEXT
+    type: string
+  - default: quay.io/fedora/fedora:42
+    description: OS image to be used
+    name: OS_IMAGE
+    type: string
+  steps:
+  - computeResources: {}
+    image: $(params.OS_IMAGE)
+    name: customize-toml-file
+    script: |
+      #!/usr/bin/env bash
+
+      echo "Updating $(workspaces.toml-file-repo.path)/$(params.TOML_FILE_RELATIVE_CONTEXT) toml file"
+
+      echo "Updating Complete username to $(params.COMPLETE_USERNAME)"
+      sed -i 's/COMPLETEUSERNAME/$(params.COMPLETE_USERNAME)/g' $(params.TOML_FILE_RELATIVE_CONTEXT)
+
+      echo "Updating Username to $(params.USERNAME)"
+      sed -i 's/USERNAME/$(params.USERNAME)/g' $(params.TOML_FILE_RELATIVE_CONTEXT)
+
+      echo "Updating User password to $(params.USERPASS)"
+      sed -i 's/USERPASS/$(params.USERPASS)/g' $(params.TOML_FILE_RELATIVE_CONTEXT)
+
+      echo "Updating admin password to $(params.ADMINPASS)"
+      sed -i 's/ADMINPASS/$(params.ADMINPASS)/g' $(params.TOML_FILE_RELATIVE_CONTEXT)
+
+      echo "Updating admin ssh public key to $(params.ADMINSSHPUBKEY)"
+      sed -i 's/ADMINSSHPUBKEY/$(params.ADMINSSHPUBKEY)/g' $(params.TOML_FILE_RELATIVE_CONTEXT)
+
+      echo "Printing updatd file"
+      cat $(params.TOML_FILE_RELATIVE_CONTEXT)
+    workingDir: $(workspaces.toml-file-repo.path)
+  workspaces:
+  - description: The repo that contains toml file to be processed
+    name: toml-file-repo

@@ -1,0 +1,76 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  annotations:
+    artifacthub.io/category: integration-delivery
+    artifacthub.io/maintainers: |
+      - name: KubeVirt Tekton tasks maintainers
+        email: kubevirt-tekton-tasks@redhat.com
+    artifacthub.io/provider: KubeVirt
+    artifacthub.io/recommendations: |
+      - url: https://kubevirt.io/
+    tekton.dev/categories: Automation
+    tekton.dev/displayName: KubeVirt execute in vm
+    tekton.dev/pipelines.minVersion: 0.43.0
+    tekton.dev/platforms: linux/amd64
+    tekton.dev/tags: kubevirt
+  labels:
+    app.kubernetes.io/version: v0.24.0
+  name: execute-in-vm
+  namespace: vm-pipelines
+spec:
+  description: Run commands in KubeVirt virtual machine.
+  params:
+  - description: Name of a VM to execute the action in.
+    name: vmName
+    type: string
+  - default: ""
+    description: Namespace of a VM to execute the action in. (defaults to active namespace)
+    name: vmNamespace
+    type: string
+  - default: __empty__
+    description: Secret to use when connecting to a VM.
+    name: secretName
+    type: string
+  - default: []
+    description: Command to execute in a VM.
+    name: command
+    type: array
+  - default: []
+    description: Arguments of a command.
+    name: args
+    type: array
+  - default: ""
+    description: Script to execute in a VM.
+    name: script
+    type: string
+  steps:
+  - args:
+    - --
+    - $(params.command)
+    - $(params.args)
+    command:
+    - entrypoint
+    computeResources: {}
+    env:
+    - name: COMMAND
+      value: execute-in-vm
+    - name: VM_NAME
+      value: $(params.vmName)
+    - name: VM_NAMESPACE
+      value: $(params.vmNamespace)
+    - name: EXECUTE_SCRIPT
+      value: $(params.script)
+    - name: CONNECTION_SECRET_NAME
+      value: $(params.secretName)
+    image: quay.io/kubevirt/tekton-tasks:v0.24.0
+    name: execute-in-vm
+    volumeMounts:
+    - mountPath: /data/connectionsecret/
+      name: connectionsecret
+      readOnly: true
+  volumes:
+  - name: connectionsecret
+    secret:
+      optional: true
+      secretName: $(params.secretName)

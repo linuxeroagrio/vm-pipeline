@@ -1,0 +1,25 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: kics-scan
+  namespace: vm-pipelines
+spec:
+  params:
+  - default: ""
+    description: Path to scan
+    name: PATH_TO_SCAN
+    type: string
+  steps:
+  - computeResources: {}
+    image: docker.io/checkmarx/kics:ubi8
+    name: scan
+    script: |
+      if [[ -f $(workspaces.source.path)/$(params.PATH_TO_SCAN) || -d $(workspaces.source.path)/$(params.PATH_TO_SCAN) ]]; then
+        /app/bin/kics scan -p $(workspaces.source.path)/$(params.PATH_TO_SCAN) -o $(workspaces.source.path)/iac-scan-result -v --report-formats "html" --ignore-on-exit "results"
+      else
+        echo "Unable to find $(workspaces.source.path)/$(params.PATH_TO_SCAN) file or directory"
+        exit 1
+      fi
+    workingDir: $(workspaces.source.path)
+  workspaces:
+  - name: source
