@@ -1,0 +1,68 @@
+FROM quay.io/fedora/fedora-bootc:42
+
+EXPOSE 3389/tcp 22/tcp
+
+COPY --chown=0:0 bootc-fetch-apply-updates.timer.d /usr/lib/systemd/system/bootc-fetch-apply-updates.timer.d/
+COPY --chown=0:0 schemas /usr/share/glib-2.0/schemas/
+COPY --chown=0:0 custom-theme/themes /usr/share/themes/
+COPY --chown=0:0 custom-theme/icons /usr/share/icons/
+COPY --chown=0:0 custom-theme/wallpaper/linuxero-agrio-wallpaper.jpg.new /usr/share/backgrounds/linuxero-agrio-wallpaper.jpg
+COPY --chown=0:0 skel /etc/skel/
+COPY --chown=0:0 sudoers.d /etc/sudoers.d/
+COPY --chown=0:0 bin/validation-tests.sh.new /usr/local/bin/validation-tests.sh
+
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
+    echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo && \
+    dnf -y install @workstation-product \
+                   @firefox \
+                   qemu-guest-agent \
+                   nautilus \
+                   nautilus-extensions \
+                   gnome-remote-desktop \
+                   freerdp \
+                   spice-vdagent \
+                   spice-webdavd \
+                   firewalld \
+                   flatpak \
+                   fastfetch \
+                   vim \
+                   terminator \
+                   git \
+                   gnome-tweaks \
+                   gnome-extensions-app \
+                   gnome-shell-extension-user-theme \
+                   gnome-shell-extension-dash-to-dock \
+                   gnome-shell-extension-background-logo \
+                   code && \
+    dnf -y remove gnome-software \
+                  libreoffice-* \
+                  rhythmbox \
+                  mediawriter \
+                  nano && \
+    dnf -y autoremove && \
+    dnf -y clean all && \
+    rm -rf /var/{cache,log} /var/lib/{dnf,rhsm} && \
+    git clone https://github.com/ohmybash/oh-my-bash.git /etc/skel/.oh-my-bash && \
+    systemctl disable dnf-makecache.timer && \
+    systemctl mask dnf-makecache.timer && \
+    systemctl disable packagekit.service && \
+    systemctl mask packagekit.service && \
+    systemctl disable packagekit-offline-update.service && \
+    systemctl mask packagekit-offline-update.service && \
+    systemctl disable flatpak-add-fedora-repos.service && \
+    systemctl mask flatpak-add-fedora-repos.service && \
+    systemctl enable firewalld.service && \
+    firewall-offline-cmd --add-service=rdp && \
+    systemctl set-default graphical.target && \
+    mkdir -pv /var/lib/flatpak/repo/{objects,tmp} && \
+    echo '[core]' > /var/lib/flatpak/repo/config && \
+    echo 'repo_version=1' >> /var/lib/flatpak/repo/config && \
+    echo 'mode=bare-user-only' >> /var/lib/flatpak/repo/config && \
+    echo 'min-free-space-size=500MB' >> /var/lib/flatpak/repo/config && \
+    echo 'KEYMAP="latam"' > /etc/vconsole.conf && \
+    echo 'FONT="eurlatgr"' >> /etc/vconsole.conf && \
+    echo "LANG=es_MX.UTF-8" > /etc/locale.conf && \ 
+    ln -sf /usr/share/zoneinfo/America/Mexico_City /etc/localtime && \
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ && \
+    dconf update && \
+    bootc container lint
