@@ -1,0 +1,325 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: virtual-desktop-image-pipeline
+  namespace: vm-pipelines
+spec:
+  finally:
+  - name: notify-to-telegram
+    params:
+    - name: bot-token-secret
+      value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+    - name: chat-id
+      value: $(params.TELEGRAM_CHAT_ID)
+    - name: message
+      value: Pipeline $(context.pipelineRun.name) was $(tasks.status)
+    taskRef:
+      kind: Task
+      name: send-to-telegram
+  - name: delete-dev-vm
+    params:
+    - name: vmName
+      value: dev-vm
+    - name: secretName
+      value: $(params.ADMIN_SSH_CREDENTIALS)
+    - name: stop
+      value: "true"
+    - name: delete
+      value: "true"
+    - name: timeout
+      value: 10m
+    taskRef:
+      kind: Task
+      name: cleanup-vm
+  - name: delete-dev-vm-storage
+    params:
+    - name: SCRIPT
+      value: oc delete pvc virtual-desktop-dev-disk-pvc
+    - name: VERSION
+      value: "4.19"
+    taskRef:
+      kind: Task
+      name: openshift-client
+  params:
+  - default: git@github.com:linuxeroagrio/vm-pipeline.git
+    description: Virtual Desktop Image source code
+    name: GIT_REPO_URL
+    type: string
+  - default: quay.io/linuxeroagrio/fedora-virtual-desktop
+    description: Virtual Desktop Image Name
+    name: VIRTUALMACHINE_IMAGE_NAME
+    type: string
+  - default: Containerfile
+    description: Virtual Desktop Containerfile Name
+    name: CONTAINER_FILENAME
+    type: string
+  - default: ./bootc-custom-image
+    description: Virtual Desktop Build Image Context Dir
+    name: IMAGE_CONTEXTDIR
+    type: string
+  - description: Test machine admin password
+    name: ADMINPASS
+    type: string
+  - description: Virtual Machine admin user ssh-public key
+    name: ADMINSSHPUBKEY
+    type: string
+  - description: Secret that contains admin ser SSH Credentials
+    name: ADMIN_SSH_CREDENTIALS
+    type: string
+  - description: Telegram bot token secret
+    name: TELEGRAM_BOT_TOKEN_SECRET
+    type: string
+  - description: Telegram chat id to send messages
+    name: TELEGRAM_CHAT_ID
+    type: string
+  tasks:
+  - name: clone-repo
+    params:
+    - name: url
+      value: $(params.GIT_REPO_URL)
+    - name: revision
+      value: ""
+    - name: refspec
+      value: ""
+    - name: submodules
+      value: "true"
+    - name: depth
+      value: "1"
+    - name: sslVerify
+      value: "true"
+    - name: crtFileName
+      value: ca-bundle.crt
+    - name: subdirectory
+      value: ""
+    - name: sparseCheckoutDirectories
+      value: ""
+    - name: deleteExisting
+      value: "true"
+    - name: httpProxy
+      value: ""
+    - name: httpsProxy
+      value: ""
+    - name: noProxy
+      value: ""
+    - name: verbose
+      value: "true"
+    - name: gitInitImage
+      value: quay.io/openshift-pipeline/pipelines-git-init-rhel9:1.19
+    - name: userHome
+      value: /home/git
+    taskRef:
+      kind: Task
+      name: git-clone
+    workspaces:
+    - name: output
+      workspace: source
+    - name: ssh-directory
+      workspace: source-ssh-key
+  - name: containerfile-scan
+    params:
+    - name: PATH_TO_SCAN
+      value: $(params.IMAGE_CONTEXTDIR)
+    runAfter:
+    - clone-repo
+    taskRef:
+      kind: Task
+      name: kics-scan
+    workspaces:
+    - name: source
+      workspace: source
+  - name: image-scan
+    params:
+    - name: ARGS
+      value:
+      - image
+      - --exit-code
+      - "0"
+      - --timeout
+      - 60m
+      - --scanners
+      - vuln
+    - name: TRIVY_IMAGE
+      value: docker.io/aquasec/trivy@sha256:944a044451791617cc0ed2ee4d1942a4f66b790d527fcd0575a6b399ccbc05a1
+    - name: IMAGE_PATH
+      value: $(params.VIRTUALMACHINE_IMAGE_NAME):$(tasks.clone-repo.results.committer-date)
+    - name: AIR_GAPPED_ENABLED
+      value: "false"
+    runAfter:
+    - build-container-image
+    taskRef:
+      kind: Task
+      name: trivy-scanner
+    workspaces:
+    - name: manifest-dir
+      workspace: source
+  - name: build-container-image
+    params:
+    - name: IMAGE
+      value: $(params.VIRTUALMACHINE_IMAGE_NAME):$(tasks.clone-repo.results.committer-date)
+    - name: BUILDER_IMAGE
+      value: quay.io/buildah/stable:v1
+    - name: STORAGE_DRIVER
+      value: overlay
+    - name: DOCKERFILE
+      value: $(params.CONTAINER_FILENAME)
+    - name: CONTEXT
+      value: $(params.IMAGE_CONTEXTDIR)
+    - name: TLSVERIFY
+      value: "true"
+    - name: FORMAT
+      value: oci
+    - name: BUILD_EXTRA_ARGS
+      value: ""
+    - name: PUSH_EXTRA_ARGS
+      value: ""
+    - name: SKIP_PUSH
+      value: "false"
+    - name: BUILD_ARGS
+      value:
+      - ""
+    runAfter:
+    - containerfile-scan
+    taskRef:
+      kind: Task
+      name: buildah
+    timeout: 1h0m0s
+    workspaces:
+    - name: source
+      workspace: source
+    - name: dockerconfig
+      workspace: registry-credentials
+  - name: create-qcow2-rootdisk
+    params:
+    - name: SOURCE_IMAGE
+      value: $(params.VIRTUALMACHINE_IMAGE_NAME)
+    - name: SOURCE_IMAGE_TAG
+      value: $(tasks.clone-repo.results.committer-date)
+    - name: BUILDER_IMAGE
+      value: quay.io/centos-bootc/bootc-image-builder:latest
+    - name: DEST_FORMAT
+      value: qcow2
+    - name: CONFIG_TOML_CONTENT
+      value: |-
+        [[customizations.user]]
+        name = "admin"
+        password = "$(params.ADMINPASS)"
+        groups = ["wheel"]
+        key = "$(params.ADMINSSHPUBKEY)"
+    - name: TLS_VERIFY
+      value: "true"
+    - name: AWS_AMI_NAME
+      value: ""
+    - name: AWS_S3_BUCKET
+      value: ""
+    - name: AWS_S3_REGION
+      value: ""
+    runAfter:
+    - image-scan
+    taskRef:
+      kind: Task
+      name: bootc-image-builder
+    timeout: 1h0m0s
+    workspaces:
+    - name: main-workspace
+      workspace: dev-disk-image
+  - name: upload-vm-rootdisk
+    params:
+    - name: ARGS
+      value: |-
+        image-upload pvc virtual-desktop-dev-disk-pvc --size=20Gi --image-path=output/qcow2/disk.qcow2 --insecure --force-bind
+    - name: VIRTCTL_IMAGE
+      value: quay.io/linuxeroagrio/virtctl:4.19
+    runAfter:
+    - create-qcow2-rootdisk
+    taskRef:
+      kind: Task
+      name: virtctl-cli
+    workspaces:
+    - name: objects
+      workspace: dev-disk-image
+  - name: create-dev-vm
+    params:
+    - name: manifest
+      value: "apiVersion: kubevirt.io/v1\nkind: VirtualMachine\nmetadata:\n  name:
+        dev-vm\nspec:\n  runStrategy: Always\n  template:\n    metadata:\n      labels:
+        \n        kasmvnc: dev\n    spec:   \n      domain: \n        firmware:\n
+        \         bootloader:\n            efi:\n              secureBoot: false\n
+        \       devices:\n          disks:  \n          - bootOrder: 1\n            name:
+        rootdisk\n          interfaces:\n          - masquerade: {}\n            model:
+        virtio\n            name: default \n        resources:\n          requests:\n
+        \           memory: 4Gi\n            cpu: \"2\"\n          limits:\n            memory:
+        4Gi\n            cpu: \"2\"\n      networks:\n      - name: default \n        pod:
+        {} \n      terminationGracePeriodSeconds: 180\n      volumes:\n      - name:
+        rootdisk\n        persistentVolumeClaim:\n          claimName: virtual-desktop-dev-disk-pvc"
+    - name: virtctl
+      value: ""
+    - name: namespace
+      value: ""
+    - name: startVM
+      value: "true"
+    - name: runStrategy
+      value: ""
+    - name: setOwnerReference
+      value: "false"
+    runAfter:
+    - upload-vm-rootdisk
+    taskRef:
+      kind: Task
+      name: create-vm-from-manifest
+  - name: wait-for-vm-running
+    params:
+    - name: vmiName
+      value: dev-vm
+    - name: vmiNamespace
+      value: ""
+    - name: successCondition
+      value: status.phase == Running
+    - name: failureCondition
+      value: ""
+    runAfter:
+    - create-dev-vm
+    taskRef:
+      kind: Task
+      name: wait-for-vmi-status
+  - name: execute-validations
+    params:
+    - name: vmName
+      value: dev-vm
+    - name: vmNamespace
+      value: ""
+    - name: secretName
+      value: $(params.ADMIN_SSH_CREDENTIALS)
+    - name: command
+      value:
+      - /usr/local/bin/validation-tests.sh
+    - name: args
+      value: []
+    - name: script
+      value: ""
+    runAfter:
+    - wait-for-vm-running
+    taskRef:
+      kind: Task
+      name: execute-in-vm
+  - name: image-promote
+    params:
+    - name: SOURCE_IMAGE_URL
+      value: docker://$(params.VIRTUALMACHINE_IMAGE_NAME):$(tasks.clone-repo.results.committer-date)
+    - name: DESTINATION_IMAGE_URL
+      value: docker://$(params.VIRTUALMACHINE_IMAGE_NAME):prod
+    - name: SRC_TLS_VERIFY
+      value: "true"
+    - name: DEST_TLS_VERIFY
+      value: "true"
+    - name: VERBOSE
+      value: "true"
+    runAfter:
+    - execute-validations
+    taskRef:
+      kind: Task
+      name: skopeo-copy
+  workspaces:
+  - name: source
+  - name: source-ssh-key
+  - name: registry-credentials
+  - name: dev-disk-image

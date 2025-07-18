@@ -1,0 +1,369 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: prepare-user-virtualdesktop-pipeline
+  namespace: vm-pipelines
+spec:
+  finally:
+  - name: remove-remote-desktop-connection-to-user
+    params:
+    - name: GUACAMOLE_CREDENTIALS
+      value: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_URL
+      value: $(params.GUACAMOLE_URL)
+    - name: GUACAMOLE_CONNECTION_NAME
+      value: $(params.VIRTUAL_MACHINE_NAME)
+    - name: USERNAME
+      value: $(params.USER_NAME)
+    - name: CONNECTION_ID
+      value: $(tasks.create-remote-desktop-connection.results.connection-id)
+    - name: OPERATION
+      value: remove
+    taskRef:
+      kind: Task
+      name: assign-user-to-connection
+    when:
+    - input: $(tasks.status)
+      operator: in
+      values:
+      - Failed
+    - input: $(tasks.add-remote-desktop-connection-to-user.status)
+      operator: in
+      values:
+      - Succeeded
+  - name: delete-remote-desktop-connection
+    params:
+    - name: GUACAMOLE_CREDENTIALS
+      value: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_URL
+      value: $(params.GUACAMOLE_URL)
+    - name: CONNECTION_ID
+      value: $(tasks.create-remote-desktop-connection.results.connection-id)
+    taskRef:
+      kind: Task
+      name: delete-connection-guacamole
+    when:
+    - input: $(tasks.status)
+      operator: in
+      values:
+      - Failed
+    - input: $(tasks.create-remote-desktop-connection.status)
+      operator: in
+      values:
+      - Succeeded
+  - name: delete-remote-desktop-user
+    params:
+    - name: GUACAMOLE_CREDENTIALS
+      value: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_URL
+      value: $(params.GUACAMOLE_URL)
+    - name: USERNAME
+      value: $(params.USER_NAME)
+    taskRef:
+      kind: Task
+      name: delete-user-guacamole
+    when:
+    - input: $(tasks.status)
+      operator: in
+      values:
+      - Failed
+    - input: $(tasks.create-remote-desktop-user.status)
+      operator: in
+      values:
+      - Succeeded
+  - name: notify-error
+    params:
+    - name: bot-token-secret
+      value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+    - name: chat-id
+      value: $(params.TELEGRAM_CHAT_ID)
+    - name: message
+      value: Prepare virtual desktop for user $(params.USER_NAME) in error
+    taskRef:
+      kind: Task
+      name: send-to-telegram
+    when:
+    - input: $(tasks.status)
+      operator: in
+      values:
+      - Failed
+  - name: send-user-access
+    params:
+    - name: bot-token-secret
+      value: $(params.TELEGRAM_BOT_TOKEN_SECRET)
+    - name: chat-id
+      value: $(params.TELEGRAM_CHAT_ID)
+    - name: message
+      value: |-
+        Success on provision $(params.USER_FULLNAME)'s virtual desktop, access info bellow:\n
+        Username: $(params.USER_NAME)\n
+        Password: $(params.USER_PASSWORD)\n
+        URL: $(params.GUACAMOLE_URL)\n
+        Connection Name: $(params.VIRTUAL_MACHINE_NAME)
+    taskRef:
+      kind: Task
+      name: send-to-telegram
+    when:
+    - input: $(tasks.status)
+      operator: in
+      values:
+      - Succeeded
+  params:
+  - description: Name of virtual machine
+    name: VIRTUAL_MACHINE_NAME
+    type: string
+  - description: Virtual Machine Namesapce
+    name: VIRTUAL_MACHINE_NAMESPACE
+    type: string
+  - description: Secret that contains admin user SSH Credentials
+    name: ADMIN_SSH_CREDENTIALS
+    type: string
+  - description: Regular User Name
+    name: USER_NAME
+    type: string
+  - description: Regular User Password
+    name: USER_PASSWORD
+    type: string
+  - description: Regular User Full Name
+    name: USER_FULLNAME
+    type: string
+  - description: Regular User Organization
+    name: USER_ORGANIZATION
+    type: string
+  - description: Regular User Role
+    name: USER_ROLE
+    type: string
+  - description: Regular User TimeZone
+    name: USER_TIMEZONE
+    type: string
+  - default: guacamole-credentials
+    description: Guacamole credentials secret
+    name: GUACAMOLE_CREDENTIALS
+    type: string
+  - description: Guacamole base url
+    name: GUACAMOLE_URL
+    type: string
+  - description: Telegram bot token secret
+    name: TELEGRAM_BOT_TOKEN_SECRET
+    type: string
+  - description: Telegram chat id to send messages
+    name: TELEGRAM_CHAT_ID
+    type: string
+  tasks:
+  - name: validate-if-vm-exists
+    params:
+    - name: SCRIPT
+      value: |-
+        oc get vm -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+        if [ "$?" == "0" ]
+        then
+          echo "Virtual Machine exists"
+          exit 0
+        else
+          echo "Virtual Machine does not exists"
+          exit 1
+        fi
+    - name: VERSION
+      value: "4.19"
+    taskRef:
+      kind: Task
+      name: openshift-client
+  - name: start-vm
+    params:
+    - name: ARGS
+      value: start -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+    - name: VIRTCTL_IMAGE
+      value: quay.io/linuxeroagrio/virtctl:4.19
+    runAfter:
+    - validate-if-vm-exists
+    taskRef:
+      kind: Task
+      name: virtctl-cli
+  - name: wait-for-ssh-port
+    params:
+    - name: ARGS
+      value: |-
+        INDEX=0
+        ITERATIONS=60
+        SLEEP_TIME_SEC=1
+        while [ $INDEX -le $ITERATIONS ]
+        do
+          nc -zv $(params.VIRTUAL_MACHINE_NAME).$(params.VIRTUAL_MACHINE_NAMESPACE).svc 22
+          if [ "$?" == "0" ]
+          then
+            exit 0
+          else
+            let INDEX=$INDEX+1
+            sleep ${SLEEP_TIME_SEC}
+          fi
+        done
+        exit 1
+    - name: NETTOOLS_IMAGE
+      value: image-registry.openshift-image-registry.svc:5000/openshift/network-tools:latest
+    runAfter:
+    - start-vm
+    taskRef:
+      kind: Task
+      name: net-tools
+  - name: enable-vnc-service
+    params:
+    - name: vmName
+      value: $(params.VIRTUAL_MACHINE_NAME)
+    - name: vmNamespace
+      value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+    - name: secretName
+      value: $(params.ADMIN_SSH_CREDENTIALS)
+    - name: command
+      value: []
+    - name: args
+      value: []
+    - name: script
+      value: |-
+        sudo -u gnome-remote-desktop winpr-makecert -silent -rdp -path ~gnome-remote-desktop rdp-tls
+        sudo grdctl --system rdp enable
+        sudo grdctl --system rdp set-credentials $(params.USER_NAME) $(params.USER_PASSWORD)
+        sudo grdctl --system rdp set-tls-key ~gnome-remote-desktop/rdp-tls.key
+        sudo grdctl --system rdp set-tls-cert ~gnome-remote-desktop/rdp-tls.crt
+        sudo grdctl --system rdp set-port 3389
+        sudo grdctl --system rdp disable-view-only
+        sudo grdctl --system rdp disable-port-negotiation
+        sudo systemctl enable gnome-remote-desktop.service
+    runAfter:
+    - wait-for-ssh-port
+    taskRef:
+      kind: Task
+      name: execute-in-vm
+  - name: add-flathub
+    params:
+    - name: vmName
+      value: $(params.VIRTUAL_MACHINE_NAME)
+    - name: vmNamespace
+      value: $(params.VIRTUAL_MACHINE_NAMESPACE)
+    - name: secretName
+      value: $(params.ADMIN_SSH_CREDENTIALS)
+    - name: command
+      value: []
+    - name: args
+      value: []
+    - name: script
+      value: sudo runuser -l $(params.USER_NAME) -c 'flatpak remote-add --user --if-not-exists
+        flathub https://flathub.org/repo/flathub.flatpakrepo'
+    runAfter:
+    - wait-for-ssh-port
+    taskRef:
+      kind: Task
+      name: execute-in-vm
+  - name: update-vm-runstrategy
+    params:
+    - name: SCRIPT
+      value: 'oc patch -n $(params.VIRTUAL_MACHINE_NAMESPACE) virtualmachine $(params.VIRTUAL_MACHINE_NAME)
+        --type=''json'' -p=''[{"op": "replace", "path": "/spec/runStrategy", "value":"Always"}]'''
+    - name: VERSION
+      value: "4.19"
+    runAfter:
+    - enable-vnc-service
+    - add-flathub
+    taskRef:
+      kind: Task
+      name: openshift-client
+  - name: restart-vm
+    params:
+    - name: ARGS
+      value: restart -n $(params.VIRTUAL_MACHINE_NAMESPACE) $(params.VIRTUAL_MACHINE_NAME)
+    - name: VIRTCTL_IMAGE
+      value: quay.io/linuxeroagrio/virtctl:4.19
+    runAfter:
+    - update-vm-runstrategy
+    taskRef:
+      kind: Task
+      name: virtctl-cli
+  - name: wait-for-rdp-port
+    params:
+    - name: ARGS
+      value: |-
+        INDEX=0
+        ITERATIONS=60
+        SLEEP_TIME_SEC=1
+        while [ $INDEX -le $ITERATIONS ]
+        do
+          nc -zv $(params.VIRTUAL_MACHINE_NAME).$(params.VIRTUAL_MACHINE_NAMESPACE).svc 3389
+          if [ "$?" == "0" ]
+          then
+            exit 0
+          else
+            let INDEX=$INDEX+1
+            sleep ${SLEEP_TIME_SEC}
+          fi
+        done
+        exit 1
+    - name: NETTOOLS_IMAGE
+      value: image-registry.openshift-image-registry.svc:5000/openshift/network-tools:latest
+    runAfter:
+    - restart-vm
+    taskRef:
+      kind: Task
+      name: net-tools
+  - name: create-remote-desktop-user
+    params:
+    - name: GUACAMOLE_CREDENTIALS
+      value: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_URL
+      value: $(params.GUACAMOLE_URL)
+    - name: NEWUSER_NAME
+      value: $(params.USER_NAME)
+    - name: NEWUSER_PASSWORD
+      value: $(params.USER_PASSWORD)
+    - name: NEWUSER_FULLNAME
+      value: $(params.USER_FULLNAME)
+    - name: NEWUSER_ORGANIZATION
+      value: $(params.USER_ORGANIZATION)
+    - name: NEWUSER_ROLE
+      value: $(params.USER_ROLE)
+    - name: NEWUSER_TIMEZONE
+      value: $(params.USER_TIMEZONE)
+    runAfter:
+    - wait-for-rdp-port
+    taskRef:
+      kind: Task
+      name: create-user-guacamole
+  - name: create-remote-desktop-connection
+    params:
+    - name: GUACAMOLE_CREDENTIALS
+      value: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_URL
+      value: $(params.GUACAMOLE_URL)
+    - name: GUACAMOLE_CONNECTION_NAME
+      value: $(params.VIRTUAL_MACHINE_NAME)
+    - name: RDP_HOSTNAME
+      value: $(params.VIRTUAL_MACHINE_NAME).$(params.VIRTUAL_MACHINE_NAMESPACE).svc
+    - name: RDP_USER
+      value: $(params.USER_NAME)
+    - name: RDP_PASSWORD
+      value: $(params.USER_PASSWORD)
+    - name: RDP_TZ
+      value: Mexico/General
+    - name: RDP_KEYBOARDLAYOUT
+      value: es-latam-qwerty
+    runAfter:
+    - wait-for-rdp-port
+    taskRef:
+      kind: Task
+      name: create-rdp-connection-guacamole
+  - name: add-remote-desktop-connection-to-user
+    params:
+    - name: GUACAMOLE_CREDENTIALS
+      value: $(params.GUACAMOLE_CREDENTIALS)
+    - name: GUACAMOLE_URL
+      value: $(params.GUACAMOLE_URL)
+    - name: GUACAMOLE_CONNECTION_NAME
+      value: $(params.VIRTUAL_MACHINE_NAME)
+    - name: USERNAME
+      value: $(params.USER_NAME)
+    - name: CONNECTION_ID
+      value: $(tasks.create-remote-desktop-connection.results.connection-id)
+    runAfter:
+    - create-remote-desktop-user
+    - create-remote-desktop-connection
+    taskRef:
+      kind: Task
+      name: assign-user-to-connection
