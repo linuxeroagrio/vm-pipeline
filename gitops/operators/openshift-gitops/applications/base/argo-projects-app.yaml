@@ -11,7 +11,3 @@ spec:
     path: patch-me-see-overlays
     repoURL: https://github.com/linuxeroagrio/vm-pipeline.git
     targetRevision: main
-  syncPolicy:
-    automated:
-      prune: false
-      selfHeal: true
