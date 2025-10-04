@@ -9,3 +9,7 @@ patches:
   target:
     kind: Application
     name: argo-projects
+- path: patch-vm-pipelines-app.yaml
+  target:
+    kind: Application
+    name: vm-pipelines
