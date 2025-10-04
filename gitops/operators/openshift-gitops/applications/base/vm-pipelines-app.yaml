@@ -3,6 +3,7 @@ kind: Application
 metadata:
   name: vm-pipelines
 spec:
+  createNamespace: true
   destination:
     namespace: openshift-gitops
     server: https://kubernetes.default.svc
@@ -15,5 +16,3 @@ spec:
     automated:
       prune: false
       selfHeal: true
-    syncOptions:
-    - CreateNamespace=true
