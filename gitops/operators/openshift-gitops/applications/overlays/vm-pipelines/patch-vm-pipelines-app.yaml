@@ -4,4 +4,4 @@ metadata:
   name: vm-pipelines
 spec:
   source:
-    path: gitops/pipelines/base
+    path: gitops/pipelines/overlays/vm-pipelines

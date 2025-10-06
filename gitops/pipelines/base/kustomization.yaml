@@ -6,3 +6,8 @@ namespace: vm-pipelines
 resources:
 - vm-pipelines-ns.yaml
 - pipelines-sa-scc-rb.yaml
+- admin-ssh-key-secret.yaml
+- registry-credentials-secret.yaml
+- skopeo-creds-secret.yaml
+- telegram-bot-token-secret.yaml
+- guacamole-credentials-secret.yaml
