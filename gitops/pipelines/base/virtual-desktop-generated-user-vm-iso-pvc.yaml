@@ -1,11 +1,10 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: toml-source-code
-  namespace: vm-pipelines
+  name: virtual-desktop-generated-user-vm-iso
 spec:
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: 7Gi

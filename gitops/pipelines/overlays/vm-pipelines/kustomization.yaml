@@ -5,3 +5,21 @@ namespace: vm-pipelines
 
 resources:
 - ../../base
+
+patches:
+- path: patch-virtual-desktop-source-code-pvc.yaml
+  target:
+    kind: PersistentVolumeClaim
+    name: virtual-desktop-source-code
+- path: patch-virtual-desktop-dev-disk-image-pvc.yaml
+  target:
+    kind: PersistentVolumeClaim
+    name: virtual-desktop-dev-disk-image
+- path: patch-toml-source-code-pvc.yaml
+  target:
+    kind: PersistentVolumeClaim
+    name: toml-source-code
+- path: patch-virtual-desktop-generated-user-vm-iso-pvc.yaml
+  target:
+    kind: PersistentVolumeClaim
+    name: virtual-desktop-generated-user-vm-iso
