@@ -13,3 +13,7 @@ patches:
   target:
     kind: Application
     name: vm-pipelines
+- path: patch-vm-projects-app.yaml
+  target:
+    kind: Application
+    name: vm-projects
