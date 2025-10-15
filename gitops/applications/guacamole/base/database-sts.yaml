@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: databse
+  name: database
 spec:
   serviceName: database
   replicas: 1
