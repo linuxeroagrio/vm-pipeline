@@ -4,4 +4,4 @@ metadata:
   name: guacamole
 spec:
   source:
-    path: gitops/applications/guacamole/base
+    path: gitops/applications/guacamole/overlays/vm-pipelines

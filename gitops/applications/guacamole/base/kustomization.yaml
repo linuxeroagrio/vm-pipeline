@@ -5,6 +5,7 @@ namespace: remote-desktop-gateway
 
 resources:
 - remote-desktop-gateway-ns.yaml
+- database-sts.yaml
 - backend-deployment.yaml
 - backend-svc.yaml
 #- pipelines-sa-scc-rb.yaml

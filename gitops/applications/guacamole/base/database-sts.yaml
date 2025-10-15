@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: databse
+spec:
+  serviceName: database
+  replicas: 1
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      containers:
+      - name: postgresql
+        image: quay.io/sclorg/postgresql-16-c10s:c10s
+        ports:
+        - containerPort: 5432
+          name: postgresql
+          protocol: TCP
+        volumeMounts:
+        - name: pg-data
+          mountPath: /var/lib/pgsql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: pg-data
+    spec:
+      accessModes:
+      - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 1Gi
+      storageClassName: patch-me-see-overlays
