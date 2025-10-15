@@ -5,3 +5,4 @@ namespace: openshift-gitops
 
 resources:
 - cluster-config-project.yaml
+- guacamole-project.yaml

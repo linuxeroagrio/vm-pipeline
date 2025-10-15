@@ -9,6 +9,10 @@ patches:
   target:
     kind: Application
     name: argo-projects
+- path: patch-guacamole-app.yaml
+  target:
+    kind: Application
+    name: guacamole
 - path: patch-vm-pipelines-app.yaml
   target:
     kind: Application

@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: remote-desktop-gateway
+
+resources:
+- remote-desktop-gateway-ns.yaml
+#- pipelines-sa-scc-rb.yaml
+#- admin-ssh-key-secret.yaml
+#- registry-credentials-secret.yaml
+#- skopeo-creds-secret.yaml
+#- telegram-bot-token-secret.yaml
+#- guacamole-credentials-secret.yaml
+#- virtual-desktop-source-code-pvc.yaml
+#- virtual-desktop-dev-disk-image-pvc.yaml
+#- toml-source-code-pvc.yaml
+#- virtual-desktop-generated-user-vm-iso-pvc.yaml
