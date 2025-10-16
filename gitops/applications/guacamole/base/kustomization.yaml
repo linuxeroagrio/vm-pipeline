@@ -8,6 +8,7 @@ resources:
 - database-credentials-secret.yaml
 - database-sts.yaml
 - backend-deployment.yaml
+- database-svc.yaml
 - backend-svc.yaml
 #- pipelines-sa-scc-rb.yaml
 #- admin-ssh-key-secret.yaml
