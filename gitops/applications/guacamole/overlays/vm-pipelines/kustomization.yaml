@@ -7,6 +7,10 @@ resources:
 - ../../base
 
 patches:
+- path: patch-database-credentials-secret.yaml
+  target:
+    kind: Secret
+    name: database-credentials
 - path: patch-database-sts.yaml
   target:
     kind: StatefulSet
