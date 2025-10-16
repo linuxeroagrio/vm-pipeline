@@ -17,7 +17,48 @@ spec:
       containers:
       - image: docker.io/guacamole/guacamole:latest
         name: guacamole
+        env:
+        - name: WEBAPP_CONTEXT
+          value: ROOT
+        - name: GUACD_HOSTNAME
+          value: backend
+        - name: POSTGRESQL_ENABLED
+          value: "true"
+        - name: POSTGRESQL_HOSTNAME
+          value: database
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_PASSWORD
+        - name: POSTGRES_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_NAME
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
         ports:
         - containerPort: 8080
           name: web
           protocol: TCP
+        resources: {}
