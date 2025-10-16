@@ -11,6 +11,7 @@ resources:
 - web-deployment.yaml
 - database-svc.yaml
 - backend-svc.yaml
+- web-svc.yaml
 #- pipelines-sa-scc-rb.yaml
 #- admin-ssh-key-secret.yaml
 #- registry-credentials-secret.yaml
