@@ -16,6 +16,22 @@ spec:
       containers:
       - name: postgresql
         image: quay.io/sclorg/postgresql-16-c10s:c10s
+        env:
+        - name: POSTGRESQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_USER
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_PASSWORD
+        - name: POSTGRESQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_NAME
         ports:
         - containerPort: 5432
           name: postgresql
