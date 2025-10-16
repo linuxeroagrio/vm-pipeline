@@ -32,6 +32,45 @@ spec:
             secretKeyRef:
               name: database-credentials
               key: DB_NAME
+        livenessProbe:
+          exec:
+            command:
+            - psql
+            - -U
+            - ${POSTGRESQL_USER}
+            - -d
+            - ${POSTGRESQL_DATABASE}
+            - -c
+            - "SELECT 1;"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - psql
+            - -U
+            - ${POSTGRESQL_USER}
+            - -d
+            - ${POSTGRESQL_DATABASE}
+            - -c
+            - "SELECT 1;"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          exec:
+            command:
+            - psql
+            - -U
+            - ${POSTGRESQL_USER}
+            - -d
+            - ${POSTGRESQL_DATABASE}
+            - -c
+            - "SELECT 1;"
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          failureThreshold: 12
         ports:
         - containerPort: 5432
           name: postgresql
