@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-database
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+spec:
+  parallelism: 1
+  completions: 1
+  activeDeadlineSeconds: 300 
+  backoffLimit: 3
+  template:
+    spec:
+      initContainers:
+      - name: create-database-script
+        image: docker.io/guacamole/guacamole:latest
+        command:
+        - sh
+        - -c
+        - "/opt/guacamole/bin/initdb.sh --postgresql | tee /tmp/database-scripts/initdb.sql"
+        volumeMounts:
+        - name: database-scritps
+          mountPath: /tmp/database-scripts
+      containers:
+      - name: init-database
+        image: quay.io/sclorg/postgresql-16-c10s:c10s
+        env:
+        - name: PGHOST
+          value: database
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_USER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_PASSWORD
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: DB_NAME
+        command:
+        - psql
+        - -f
+        - /tmp/database-scripts/initdb.sql
+        volumeMounts:
+        - name: database-scritps
+          mountPath: /tmp/database-scripts
+      restartPolicy: OnFailure
+      volumes:
+      - name: database-scritps
+        emptyDir: {}

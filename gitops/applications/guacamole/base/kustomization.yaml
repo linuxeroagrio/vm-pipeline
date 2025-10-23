@@ -13,6 +13,7 @@ resources:
 - backend-svc.yaml
 - web-svc.yaml
 - web-route.yaml
+- init-database-job.yaml
 #- pipelines-sa-scc-rb.yaml
 #- admin-ssh-key-secret.yaml
 #- registry-credentials-secret.yaml
