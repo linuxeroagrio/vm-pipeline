@@ -26,17 +26,17 @@ spec:
           value: "true"
         - name: POSTGRESQL_HOSTNAME
           value: database
-        - name: POSTGRES_USER
+        - name: POSTGRESQL_USERNAME
           valueFrom:
             secretKeyRef:
               name: database-credentials
               key: DB_USER
-        - name: POSTGRES_PASSWORD
+        - name: POSTGRESQL_PASSWORD
           valueFrom:
             secretKeyRef:
               name: database-credentials
               key: DB_PASSWORD
-        - name: POSTGRES_DATABASE
+        - name: POSTGRESQL_DATABASE
           valueFrom:
             secretKeyRef:
               name: database-credentials
