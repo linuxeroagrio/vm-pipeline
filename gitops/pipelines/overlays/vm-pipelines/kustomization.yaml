@@ -7,6 +7,10 @@ resources:
 - ../../base
 
 patches:
+- path: patch-guacamole-credentials-secret.yaml
+  target:
+    kind: Secret
+    name: guacamole-credentials
 - path: patch-virtual-desktop-source-code-pvc.yaml
   target:
     kind: PersistentVolumeClaim
