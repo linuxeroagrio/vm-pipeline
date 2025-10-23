@@ -4,6 +4,7 @@ metadata:
   name: init-database
   annotations:
     argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
 spec:
   parallelism: 1
   completions: 1
